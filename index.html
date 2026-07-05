@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HSK Study">
+<meta name="theme-color" content="#0f1230">
+<title>HSK Chinese Study</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230f1230'/%3E%3Ctext x='90' y='128' font-size='110' text-anchor='middle' fill='%23ffd166' font-family='sans-serif'%3E%E5%AD%97%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3/dist/index.js" onerror="window.__pinyinFailed=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" onerror="window.__ocrFailed=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js" onerror="window.__pdfFailed=true"></script>
+<script>
+  if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" onerror="window.__xlsxFailed=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js" onerror="window.__docxFailed=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" onerror="window.__zipFailed=true"></script>
+<style>
+  :root{
+    --bg1:#0f1230; --bg2:#1b1f4d; --card:#ffffff; --ink:#1a1d2e;
+    --accent:#ffd166; --accent2:#06d6a0; --danger:#ef476f; --muted:#8a8fb5; --pill:#2a2f63;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:linear-gradient(160deg,var(--bg1),var(--bg2)); color:#fff; min-height:100%;
+    display:flex; flex-direction:column;
+    padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 8px);
+  }
+  header{text-align:center; padding:12px 0 4px;}
+  header h1{margin:0; font-size:20px; letter-spacing:.5px;}
+  header h1 .zh{color:var(--accent);}
+
+  /* sticky top bar (title + menu always visible) */
+  .topbar{position:sticky; top:0; z-index:30; background:var(--bg1);
+    margin:0 -14px; padding:env(safe-area-inset-top) 14px 0;
+    box-shadow:0 8px 16px -8px rgba(8,9,24,.95);}
+  /* mode nav */
+  .modenav{display:flex; gap:6px; overflow-x:auto; padding:8px 0; -webkit-overflow-scrolling:touch;}
+  .modenav::-webkit-scrollbar{display:none;}
+  .mbtn{flex:none; font-size:13px; padding:9px 14px; border-radius:20px; border:none; background:var(--pill); color:#cfd3f5; cursor:pointer; white-space:nowrap;}
+  .mbtn.active{background:var(--accent); color:#1a1d2e; font-weight:700;}
+  #micBtn.rec{background:var(--danger); color:#fff; animation:micpulse 1.2s ease-in-out infinite;}
+  @keyframes micpulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+  .tools{display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; margin:2px 0 6px;}
+  .seg{display:flex; background:var(--pill); border-radius:14px; overflow:hidden;}
+  .seg button{border:none; background:transparent; color:#cfd3f5; padding:8px 12px; font-size:13px; cursor:pointer;}
+  .seg button.active{background:var(--accent2); color:#06251c; font-weight:700;}
+  select.flt{font-size:13px; background:var(--pill); color:#fff; border:none; border-radius:12px; padding:8px 10px;}
+  .toggle{font-size:13px; padding:8px 12px; border-radius:12px; border:none; background:var(--pill); color:#cfd3f5; cursor:pointer;}
+  .toggle.on{background:var(--accent2); color:#06251c; font-weight:700;}
+  .status{min-height:16px; text-align:center; font-size:13px; color:var(--accent); margin:2px 0;}
+  .status.err{color:var(--danger);}
+
+  .stage{flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center;}
+
+  /* flashcard */
+  .card-wrap{width:100%; max-width:380px; perspective:1400px; margin:0 auto;}
+  .card{position:relative; width:100%; aspect-ratio:3/4.2; transform-style:preserve-3d; transition:transform .55s cubic-bezier(.4,.2,.2,1); cursor:pointer;}
+  .card.flipped{transform:rotateY(180deg);}
+  .face{position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:24px; background:var(--card); color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.45); overflow:hidden; display:flex; flex-direction:column;}
+  .front{align-items:center; justify-content:center; padding:24px; text-align:center;}
+  .front .en{font-size:clamp(26px,8vw,42px); font-weight:800; line-height:1.15;}
+  .front .bighz{font-size:clamp(46px,16vw,90px); font-weight:800; line-height:1;}
+  .front .listenbtn{font-size:60px;}
+  .front .hint{position:absolute; bottom:16px; font-size:12px; color:#9aa0c2;}
+  .tag{position:absolute; top:14px; left:14px; font-size:10px; color:#9aa0c2; letter-spacing:1px; text-transform:uppercase;}
+  .cat-pill{position:absolute; top:12px; right:12px; font-size:9px; letter-spacing:.5px; text-transform:uppercase; color:#06251c; background:var(--accent2); padding:4px 8px; border-radius:12px; font-weight:700;}
+  .lz-pill{position:absolute; top:12px; right:12px; font-size:9px; letter-spacing:.5px; text-transform:uppercase; color:#1a1d2e; background:var(--accent); padding:4px 8px; border-radius:12px; font-weight:700;}
+  .back{transform:rotateY(180deg); align-items:center; justify-content:center; text-align:center; padding:24px;}
+  .back .stack{width:100%; max-height:100%; overflow-y:auto;}
+  .back .bighz2{font-size:clamp(30px,9vw,46px); font-weight:800; line-height:1.2;}
+  .back .py2{font-size:clamp(16px,4.6vw,22px); color:#5b6090; margin-top:6px;}
+  .back .meaning{font-size:15px; color:#9aa0c2; margin-top:14px;}
+  .back .opt2{padding:8px 0;}
+  .back .opt2 + .opt2{border-top:1px solid #eef0f7; margin-top:6px;}
+  .example{margin-top:16px; border-top:1px solid #eef0f7; padding-top:12px; text-align:center;}
+  .example .exzh{font-size:21px; font-weight:600; line-height:1.45;}
+  .example .expy{font-size:13px; color:#5b6090; margin-top:4px;}
+  .example .exen{font-size:13px; color:#8a8fb5; margin-top:4px;}
+  .example .exnote{font-size:12px; color:#9aa0c2;}
+  .pic{width:100%; height:40%; background:#e9ebf5 center/cover no-repeat; position:relative; flex:none;}
+  .pic .ph{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#9aa0c2; font-size:13px; text-align:center; padding:10px;}
+  .pic .regen{position:absolute; top:8px; right:8px; background:rgba(0,0,0,.45); color:#fff; border:none; border-radius:20px; font-size:11px; padding:5px 10px; cursor:pointer;}
+  .back .body{flex:1; overflow-y:auto; padding:14px 16px 16px;}
+  .back .enmini{font-size:13px; color:#9aa0c2; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;}
+  .opt{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #eef0f7;}
+  .opt:last-child{border-bottom:none;}
+  .opt .txt{flex:1;}
+  .opt .hanzi{font-size:30px; font-weight:700; line-height:1.15;}
+  .opt .py{font-size:15px; color:#5b6090; margin-top:2px;}
+  .opt .em{font-size:14px; color:#1a1d2e; margin-top:2px;}
+  .spk{flex:none; width:42px; height:42px; border-radius:50%; border:none; background:var(--accent2); color:#06251c; font-size:18px; cursor:pointer;}
+  .spk:active{transform:scale(.92);}
+
+  .controls{display:flex; gap:10px; width:100%; max-width:380px; margin:16px auto 4px;}
+  .controls .nav{flex:1; padding:14px 0; border-radius:16px; border:none; background:rgba(255,255,255,.14); color:#fff; font-size:15px; font-weight:600; cursor:pointer;}
+  .judge{display:flex; gap:10px; width:100%; max-width:380px; margin:6px auto 0;}
+  .judge button{flex:1; padding:13px 0; border-radius:16px; border:none; font-size:15px; font-weight:700; cursor:pointer;}
+  .know{background:var(--accent2); color:#06251c;} .dont{background:var(--danger); color:#fff;}
+  .counter{text-align:center; font-size:13px; color:var(--muted); margin-top:12px;}
+  .empty{text-align:center; color:var(--muted); padding:40px 20px; font-size:15px; line-height:1.6;}
+
+  /* grammar */
+  .gcard{width:100%; max-width:420px; background:var(--card); color:var(--ink); border-radius:22px; box-shadow:0 18px 50px rgba(0,0,0,.45); padding:22px; min-height:46vh;}
+  .gcard .gpt{font-size:24px; font-weight:800;}
+  .gcard .gpat{margin-top:8px; font-size:15px; color:#06251c; background:#d8fff4; border:1px solid #9fe9d6; border-radius:10px; padding:8px 12px; display:inline-block;}
+  .gcard .grule{margin-top:14px; font-size:15px; line-height:1.55; color:#3a3f5c;}
+  .gex{margin-top:14px; border-top:1px solid #eef0f7; padding-top:12px;}
+  .gex .row2{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .gex .hz{font-size:22px; font-weight:700;}
+  .gex .py{font-size:14px; color:#5b6090;}
+  .gex .em{font-size:14px; color:#1a1d2e;}
+
+  /* match + fill */
+  .game{width:100%; max-width:420px; text-align:center;}
+  .qpic{width:78%; max-width:300px; aspect-ratio:1/1; margin:0 auto 16px; border-radius:20px; background:#e9ebf5 center/cover no-repeat; position:relative;}
+  .qpic .ph{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#9aa0c2; font-size:13px;}
+  .qprompt{font-size:20px; line-height:1.5; margin-bottom:16px;}
+  .qprompt .blank{display:inline-block; min-width:54px; border-bottom:3px solid var(--accent); margin:0 4px; vertical-align:bottom;}
+  .qprompt .blank.filled{color:var(--accent2); border-color:var(--accent2);}
+  .qhint{font-size:14px; color:var(--muted); margin-bottom:14px;}
+  .choices{display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:380px; margin:0 auto;}
+  .choice{padding:16px 10px; border-radius:16px; border:2px solid rgba(255,255,255,.18); background:rgba(255,255,255,.08); color:#fff; cursor:pointer; font-size:20px;}
+  .choice .cpy{display:block; font-size:13px; color:#cfd3f5; margin-top:4px;}
+  .choice.correct{background:var(--accent2); color:#06251c; border-color:var(--accent2);}
+  .choice.wrong{background:var(--danger); color:#fff; border-color:var(--danger);}
+  .choice:disabled{opacity:.9;}
+  .score{font-size:14px; color:var(--muted); margin-bottom:12px;}
+  .reveal{margin-top:14px; font-size:15px; color:#cfd3f5; min-height:20px;}
+  .gamebtns{display:flex; gap:10px; max-width:380px; margin:16px auto 0;}
+  .gamebtns button{flex:1; padding:14px 0; border-radius:16px; border:none; font-weight:700; font-size:15px; cursor:pointer;}
+  .primary{background:var(--accent); color:#1a1d2e;} .ghost{background:rgba(255,255,255,.14); color:#fff;}
+
+  /* manage */
+  .addbar{display:flex; gap:8px; margin:6px 0;}
+  .addbar input{flex:1; min-width:0; border:none; border-radius:14px; padding:13px 14px; font-size:16px; background:rgba(255,255,255,.12); color:#fff; outline:none;}
+  .addbar input::placeholder{color:#b7bbdd;}
+  .btn{border:none; border-radius:14px; padding:0 16px; font-size:16px; font-weight:700; background:var(--accent); color:#1a1d2e; cursor:pointer;}
+  .btn.ghost{background:rgba(255,255,255,.14); color:#fff; font-size:20px; padding:0 13px;}
+  .btn:active{transform:scale(.96);}
+  .list{width:100%; max-width:560px; margin:6px auto 0; overflow-y:auto;}
+  .grouphdr{font-size:13px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:1px; margin:14px 4px 8px;}
+  .row{display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.08); border-radius:14px; padding:10px 12px; margin-bottom:8px;}
+  .row .thumb{width:46px; height:46px; border-radius:10px; background:#2a2f63 center/cover; flex:none;}
+  .row .info{flex:1; min-width:0;}
+  .row .info .e{font-weight:700; font-size:15px;}
+  .row .info .c{font-size:15px; color:#cfd3f5;}
+  .row .info .k{color:var(--accent2);}
+  .row .info .sub{font-size:11px; color:var(--muted); margin-top:2px;}
+  .row .del{background:none; border:none; color:var(--danger); font-size:20px; cursor:pointer; padding:6px;}
+  .row .del.edit{color:#cfd3f5;}
+  .row.bad{border:1px solid var(--danger); background:rgba(239,71,111,.12);}
+  .row.flag{border:1px solid #f4a300; background:rgba(244,163,0,.10);}
+  .row .del.flagb{color:#6b7099;}
+  .row .del.flagb.on{color:#f4a300;}
+  .sub.warn{color:var(--danger); font-weight:600;}
+  .flagbtn{flex:1; padding:11px 0; border-radius:16px; border:none; font-size:14px; font-weight:700; cursor:pointer; background:rgba(255,255,255,.14); color:#fff;}
+  .flagbtn.on{background:#f4a300; color:#1a1d2e;}
+  .flag-pill{position:absolute; top:12px; right:12px; font-size:13px;}
+  .probbar{font-size:13px; color:var(--muted); text-align:center; margin:8px 2px 2px;}
+  .elab{display:block; font-size:12px; color:var(--muted); margin:12px 2px 0;}
+  .elab input{display:block; width:100%; margin-top:5px; border:none; border-radius:12px; padding:12px 14px; font-size:16px; background:rgba(255,255,255,.1); color:#fff; outline:none;}
+  .elink{background:none; border:none; color:var(--accent2); font-size:12px; cursor:pointer; padding:0 0 0 6px;}
+  .install{font-size:11px; color:var(--muted); text-align:center; margin-top:10px; line-height:1.5;}
+
+  /* packs */
+  .packsintro{font-size:13px; color:var(--muted); text-align:center; margin:6px 0 2px;}
+  .packs{max-width:600px; margin:6px auto;}
+  .packgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .packtile{background:rgba(255,255,255,.08); border-radius:16px; padding:12px; display:flex; flex-direction:column;}
+  .pkname{font-weight:700; font-size:15px;}
+  .pksample{font-size:20px; margin:6px 0 2px; line-height:1.3;}
+  .pkmeta{font-size:11px; color:var(--muted); margin-bottom:9px;}
+  .pkadd{width:100%; padding:9px 0; font-size:14px; margin-top:auto;}
+  .pkadd.done{background:var(--accent2); color:#06251c;}
+
+  /* overlay */
+  .overlay{position:fixed; inset:0; background:rgba(8,9,24,.82); backdrop-filter:blur(4px); z-index:50; display:flex; align-items:flex-end; justify-content:center; padding:14px;}
+  .sheet{width:100%; max-width:520px; background:#1b1f4d; border-radius:22px; padding:20px 18px calc(18px + env(safe-area-inset-bottom)); box-shadow:0 -10px 40px rgba(0,0,0,.5);}
+  .sheet h2{margin:0 0 12px; font-size:18px; text-align:center;}
+  .ovbar{height:8px; border-radius:8px; background:rgba(255,255,255,.12); overflow:hidden; margin:8px 0;}
+  .ovbar-fill{height:100%; width:0%; background:var(--accent); transition:width .25s;}
+  .ovmsg{font-size:13px; color:var(--muted); text-align:center; min-height:18px; margin:6px 0;}
+  .ovhint{font-size:12px; color:var(--muted); margin:8px 2px 0;}
+  .ovclean{display:flex; align-items:center; gap:9px; font-size:13px; color:#cfd3f5; margin:10px 2px 0;}
+  .ovclean input{width:18px; height:18px; flex:none;}
+  #ovWords{width:100%; height:32vh; resize:none; border:none; border-radius:14px; padding:12px 14px; font-size:16px; line-height:1.7; background:rgba(255,255,255,.1); color:#fff; outline:none; font-family:inherit;}
+  .ovbtns{display:flex; gap:10px; margin-top:14px;}
+  .ovbtns .nav{flex:1; padding:14px 0; border-radius:16px; border:none; background:rgba(255,255,255,.14); color:#fff; font-weight:600; font-size:15px;}
+  .ovbtns .btn{flex:2;}
+</style>
+</head>
+<body>
+<div class="topbar">
+<header>
+  <h1><span class="zh">汉语</span> HSK Study</h1>
+</header>
+
+<div class="modenav" id="modenav">
+  <button class="mbtn active" data-mode="cards">📇 Flashcards</button>
+  <button class="mbtn" data-mode="grammar">📐 Grammar</button>
+  <button class="mbtn" data-mode="match">🖼️ Match</button>
+  <button class="mbtn" data-mode="fill">✍️ Fill-in</button>
+  <button class="mbtn" data-mode="packs">📚 Packs</button>
+  <button class="mbtn" data-mode="manage">⚙️ Manage</button>
+</div>
+
+<div class="status" id="status"></div>
+</div><!-- /topbar -->
+
+<!-- CARDS -->
+<div id="view-cards">
+  <div class="tools" id="cardsTools"></div>
+  <div class="stage" id="cardsStage"></div>
+</div>
+
+<!-- GRAMMAR -->
+<div id="view-grammar" style="display:none;">
+  <div class="tools" id="grammarTools"></div>
+  <div class="stage" id="grammarStage"></div>
+</div>
+
+<!-- MATCH -->
+<div id="view-match" style="display:none;">
+  <div class="stage" id="matchStage"></div>
+</div>
+
+<!-- FILL -->
+<div id="view-fill" style="display:none;">
+  <div class="stage" id="fillStage"></div>
+</div>
+
+<!-- PACKS -->
+<div id="view-packs" style="display:none;">
+  <p class="packsintro">Tap a subject to instantly add its words as flashcards (with characters &amp; pinyin).</p>
+  <div class="packs" id="packsStage"></div>
+</div>
+
+<!-- MANAGE -->
+<div id="view-manage" style="display:none;">
+  <div class="addbar">
+    <input id="word" type="text" placeholder="Add words — comma-separated OK…" autocomplete="off" autocapitalize="none" enterkeyhint="go">
+    <button class="btn" id="addBtn">Add</button>
+    <button class="btn ghost" id="micBtn" title="Speak an English word — makes a card with an example sentence">🎤</button>
+    <button class="btn ghost" id="photoBtn" title="From a photo">📷</button>
+    <button class="btn ghost" id="pdfBtn" title="From a file: PDF, Word, Excel, CSV, Numbers">📄</button>
+    <button class="btn ghost" id="keyBtn" title="Set Gemini API key (free, smarter reader)">🔑</button>
+  </div>
+  <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+  <input type="file" id="pdfInput" accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.txt,.numbers,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain" style="display:none">
+  <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:4px 0 2px;">
+    <button class="toggle" id="cleanBtn">🧹 Remove junk / incomplete</button>
+    <button class="toggle" id="fixBtn">🔧 Check &amp; fix mismatches (online)</button>
+    <button class="toggle" id="exportBtn">💾 Backup deck</button>
+    <button class="toggle" id="importBtn">📥 Restore backup</button>
+    <input type="file" id="importInput" accept=".json,application/json" style="display:none">
+  </div>
+  <div class="list" id="listView"></div>
+  <div class="install">📷 imports from a photo · 📄 imports from a PDF, Word, Excel, CSV or text file (Numbers: export to CSV/Excel first). Add a free <b>🔑 Gemini key</b> for smart reading of textbook pages (keeps Chinese, pinyin & English from the image).<br>💡 No key needed: type or paste lines with Chinese in them — <b>english | 汉字 | pīnyīn</b> in any order, or plain <b>汉字 pīnyīn english</b> — and they're added directly, no translation lookup.<br>Tip: in Safari tap <b>Share → Add to Home Screen</b> to use this like an app. Your cards are saved on this device.</div>
+</div>
+
+<!-- import overlay -->
+<div class="overlay" id="overlay" style="display:none;">
+  <div class="sheet">
+    <h2 id="ovTitle">Reading…</h2>
+    <div class="ovbar"><div class="ovbar-fill" id="ovBar"></div></div>
+    <p class="ovmsg" id="ovMsg"></p>
+    <textarea id="ovWords" style="display:none;" spellcheck="false"></textarea>
+    <p class="ovhint" id="ovHint" style="display:none;">One word per line. Edit anything wrong, then create your cards.</p>
+    <label class="ovclean" id="ovCleanRow" style="display:none;"><input type="checkbox" id="ovClean" checked> Auto-remove words that aren’t clear English</label>
+    <div class="ovbtns" id="ovBtns" style="display:none;">
+      <button class="nav" id="ovCancel">Cancel</button>
+      <button class="btn" id="ovGo">Create cards</button>
+    </div>
+  </div>
+</div>
+
+<!-- edit overlay -->
+<div class="overlay" id="editOverlay" style="display:none;">
+  <div class="sheet">
+    <h2>Edit card</h2>
+    <label class="elab">English<input id="edEn" type="text" autocomplete="off"></label>
+    <label class="elab">Characters (汉字)<input id="edHz" type="text" autocomplete="off"></label>
+    <label class="elab">Pinyin<button type="button" class="elink" id="edAuto">auto from characters</button><input id="edPy" type="text" autocomplete="off"></label>
+    <label class="elab">Lesson<input id="edLesson" type="text" autocomplete="off"></label>
+    <label class="elab">Topic<input id="edTopic" type="text" autocomplete="off"></label>
+    <div class="ovbtns">
+      <button class="nav" id="edCancel">Cancel</button>
+      <button class="btn" id="edSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const KEY='zh_hsk_v2';
+  const $=s=>document.querySelector(s);
+  const hasZh=s=>/[㐀-鿿]/.test(s);
+  const esc=s=>(s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+
+  // ---------- HSK seed data (transcribed from the textbook pages) ----------
+  const VOCAB=[
+    // Lesson 5 — "I will work overtime on Sunday"
+    {l:'Lesson 5',t:'Verbs',en:'to look for',h:'找',p:'zhǎo'},
+    {l:'Lesson 5',t:'Social',en:'What is your surname? (polite)',h:'您贵姓',p:'nín guì xìng'},
+    {l:'Lesson 5',t:'Descriptions',en:'expensive; honorable',h:'贵',p:'guì'},
+    {l:'Lesson 5',t:'People',en:'surname',h:'姓',p:'xìng'},
+    {l:'Lesson 5',t:'Function',en:'a short while; briefly',h:'一下儿',p:'yíxiàr'},
+    {l:'Lesson 5',t:'Social',en:'please; to invite',h:'请',p:'qǐng'},
+    {l:'Lesson 5',t:'Verbs',en:'to wait',h:'等',p:'děng'},
+    {l:'Lesson 5',t:'Time',en:'free time',h:'空儿',p:'kòngr'},
+    {l:'Lesson 5',t:'Verbs',en:'to look; to watch',h:'看',p:'kàn'},
+    {l:'Lesson 5',t:'Places',en:'cinema',h:'电影院',p:'diànyǐngyuàn',pic:1},
+    {l:'Lesson 5',t:'The Arts',en:'movie; film',h:'电影',p:'diànyǐng',pic:1},
+    {l:'Lesson 5',t:'Time',en:'Sunday',h:'星期天',p:'xīngqītiān'},
+    {l:'Lesson 5',t:'Time',en:'week',h:'星期',p:'xīngqī'},
+    {l:'Lesson 5',t:'Verbs',en:'to play; to have fun',h:'玩儿',p:'wánr'},
+    {l:'Lesson 5',t:'Places',en:'park',h:'公园',p:'gōngyuán',pic:1},
+    {l:'Lesson 5',t:'Social',en:'idea',h:'主意',p:'zhǔyi'},
+    {l:'Lesson 5',t:'Function',en:'but',h:'可是',p:'kěshì'},
+    {l:'Lesson 5',t:'Function',en:'always',h:'总是',p:'zǒngshì'},
+    {l:'Lesson 5',t:'Time',en:'next week',h:'下个星期',p:'xià ge xīngqī'},
+    // Lesson 10 — "At home"
+    {l:'Lesson 10',t:'Technology',en:'cell phone',h:'手机',p:'shǒujī',pic:1},
+    {l:'Lesson 10',t:'Verbs',en:'to wash; to bathe',h:'洗',p:'xǐ'},
+    {l:'Lesson 10',t:'Verbs',en:'to see; to catch sight of',h:'看见',p:'kànjiàn'},
+    {l:'Lesson 10',t:'Colors',en:'white',h:'白色',p:'báisè'},
+    {l:'Lesson 10',t:'Function',en:"don't (do something)",h:'别',p:'bié'},
+    {l:'Lesson 10',t:'Around the House',en:'table; desk',h:'桌子',p:'zhuōzi',pic:1},
+    {l:'Lesson 10',t:'Technology',en:'computer',h:'电脑',p:'diànnǎo',pic:1},
+    {l:'Lesson 10',t:'Places',en:'beside; next to',h:'旁边',p:'pángbiān'},
+    {l:'Lesson 10',t:'Clothing',en:'clothes',h:'衣服',p:'yīfu',pic:1},
+    {l:'Lesson 10',t:'Colors',en:'red',h:'红色',p:'hóngsè'},
+    {l:'Lesson 10',t:'Verbs',en:'to help',h:'帮',p:'bāng'},
+    {l:'Lesson 10',t:'Places',en:'outside',h:'外边',p:'wàibian'},
+    // Lesson 11 — karaoke / dorm / store
+    {l:'Lesson 11',t:'The Arts',en:'to sing',h:'唱歌',p:'chàng gē'},
+    {l:'Lesson 11',t:'People',en:'man; male',h:'男',p:'nán'},
+    {l:'Lesson 11',t:'People',en:'woman; female',h:'女',p:'nǚ'},
+    {l:'Lesson 11',t:'People',en:'child; kid',h:'孩子',p:'háizi',pic:1},
+    {l:'Lesson 11',t:'Places',en:'right side',h:'右边',p:'yòubian'},
+    {l:'Lesson 11',t:'Function',en:'than; compared to',h:'比',p:'bǐ'},
+    {l:'Lesson 11',t:'Shopping',en:'cheap; inexpensive',h:'便宜',p:'piányi'},
+    {l:'Lesson 11',t:'Time',en:'yesterday',h:'昨天',p:'zuótiān'},
+    {l:'Lesson 11',t:'Function',en:'together',h:'一起',p:'yìqǐ'},
+    {l:'Lesson 11',t:'People',en:'friend',h:'朋友',p:'péngyou',pic:1},
+    {l:'Lesson 11',t:'People',en:'boyfriend',h:'男朋友',p:'nánpéngyou'},
+    {l:'Lesson 11',t:'People',en:'classmate',h:'同学',p:'tóngxué'},
+    {l:'Lesson 11',t:'Verbs',en:'to introduce',h:'介绍',p:'jièshào'},
+    {l:'Lesson 11',t:'Time',en:'the first time',h:'第一次',p:'dì yī cì'},
+    {l:'Lesson 11',t:'Verbs',en:'to meet; to see',h:'见',p:'jiàn'},
+    {l:'Lesson 11',t:'Places',en:'left side',h:'左边',p:'zuǒbian'},
+    {l:'Lesson 11',t:'Around the House',en:'newspaper',h:'报纸',p:'bàozhǐ',pic:1},
+    {l:'Lesson 11',t:'People',en:'elder sister',h:'姐姐',p:'jiějie',pic:1},
+    {l:'Lesson 11',t:'People',en:'elder brother',h:'哥哥',p:'gēge',pic:1},
+    {l:'Lesson 11',t:'Verbs',en:'to write characters',h:'写字',p:'xiě zì'},
+    {l:'Lesson 11',t:'Time',en:'years (of age)',h:'岁',p:'suì'},
+    {l:'Lesson 11',t:'Time',en:'today',h:'今天',p:'jīntiān'},
+    {l:'Lesson 11',t:'Food & Drink',en:'watermelon',h:'西瓜',p:'xīguā',pic:1},
+    {l:'Lesson 11',t:'Function',en:'how',h:'怎么',p:'zěnme'},
+    {l:'Lesson 11',t:'Shopping',en:'to sell',h:'卖',p:'mài'},
+    {l:'Lesson 11',t:'Shopping',en:'yuan (unit of money)',h:'块',p:'kuài'},
+    {l:'Lesson 11',t:'Shopping',en:'jin (500 grams)',h:'斤',p:'jīn'},
+    {l:'Lesson 11',t:'Food & Drink',en:'apple',h:'苹果',p:'píngguǒ',pic:1},
+    {l:'Lesson 11',t:'Function',en:'some; a few',h:'一些',p:'yìxiē'}
+  ];
+
+  const GRAMMAR=[
+    {l:'Lesson 11',point:'Comparisons with 比',pattern:'A + 比 + B + adjective',rule:'Use 比 (bǐ) to compare two things — the one that is "more" comes first. You can add an amount after the adjective (大三岁 = older by three years).',ex:[{h:'苹果比昨天便宜。',p:'Píngguǒ bǐ zuótiān piányi.',e:'The apples are cheaper than yesterday.'},{h:'他比我大三岁。',p:'Tā bǐ wǒ dà sān suì.',e:'He is three years older than me.'}]},
+    {l:'Lesson 11',point:'是不是 questions',pattern:'是不是 + … ？',rule:'Make a yes/no question with the positive-negative form of the verb. 是不是 asks "is it / isn\'t it?". Answer 是 (yes) or 不是 (no).',ex:[{h:'是不是男朋友？',p:'Shì bu shì nánpéngyou?',e:'Is he your boyfriend?'}]},
+    {l:'Lesson 10',point:'The particle 了 (le)',pattern:'verb + 了',rule:'了 marks a completed action or a change of state. 洗了 = "have washed".',ex:[{h:'那件衣服我帮你洗了。',p:'Nà jiàn yīfu wǒ bāng nǐ xǐ le.',e:'I washed that piece of clothing for you.'}]},
+    {l:'Lesson 10',point:"别 + verb (don't…)",pattern:'别 + verb (+ 了)',rule:'别 (bié) forms a negative command: "don\'t…". Adding 了 means "stop doing it".',ex:[{h:'别找了，手机在桌子上。',p:'Bié zhǎo le, shǒujī zài zhuōzi shang.',e:'Stop looking — the phone is on the desk.'}]},
+    {l:'Lesson 11',point:'Measure words 个 / 件 / 斤',pattern:'number + measure word + noun',rule:'A measure word sits between a number and a noun. 个 (gè) is general, 件 (jiàn) is for clothing, 斤 (jīn) is a weight (500g).',ex:[{h:'一个朋友',p:'yí ge péngyou',e:'a friend'},{h:'红色的那件',p:'hóngsè de nà jiàn',e:'that red one (clothing)'},{h:'三块五一斤',p:'sān kuài wǔ yì jīn',e:'3.5 yuan per 500g'}]},
+    {l:'Lesson 11',point:'Descriptive 的 clauses',pattern:'[description] + 的 + noun',rule:'的 (de) links a description — even a whole phrase — to the noun, like "the … that …" in English.',ex:[{h:'看报纸的女孩子',p:'kàn bàozhǐ de nǚ háizi',e:'the girl who is reading the newspaper'},{h:'写字的那个人',p:'xiě zì de nàge rén',e:'that person who is writing'}]},
+    {l:'Lesson 11',point:'Asking a price: 怎么卖',pattern:'noun + 怎么卖 ？',rule:'怎么卖 (zěnme mài), literally "how sold?", asks the price of something sold by weight or quantity.',ex:[{h:'今天的西瓜怎么卖？',p:'Jīntiān de xīguā zěnme mài?',e:'How much are the watermelons today?'}]},
+    {l:'Lesson 5',point:'Polite 您贵姓',pattern:'您贵姓 ？',rule:'您贵姓 is a polite way to ask a surname. Reply with 我姓… ("My surname is…").',ex:[{h:'您贵姓？',p:'Nín guì xìng?',e:'May I ask your surname?'},{h:'我姓王。',p:'Wǒ xìng Wáng.',e:'My surname is Wang.'}]}
+  ];
+
+  const FILL=[
+    {l:'Lesson 11',q:['苹果','昨天便宜。'],a:'比',choices:['比','和','在','也'],p:'Píngguǒ bǐ zuótiān piányi.',e:'Apples are cheaper than yesterday.'},
+    {l:'Lesson 11',q:['他','我大三岁。'],a:'比',choices:['比','是','很','和'],p:'Tā bǐ wǒ dà sān suì.',e:'He is three years older than me.'},
+    {l:'Lesson 10',q:['','找了，手机在桌子上。'],a:'别',choices:['别','不','没','很'],p:'Bié zhǎo le, shǒujī zài zhuōzi shang.',e:"Stop looking — the phone's on the desk."},
+    {l:'Lesson 11',q:['今天的西瓜','卖？'],a:'怎么',choices:['怎么','什么','哪儿','谁'],p:'Jīntiān de xīguā zěnme mài?',e:"How are today's watermelons priced?"},
+    {l:'Lesson 11',q:['是不是','朋友？'],a:'男',choices:['男','女','好','大'],p:'Shì bu shì nánpéngyou?',e:'Is he your boyfriend?'},
+    {l:'Lesson 10',q:['那','衣服我帮你洗了。'],a:'件',choices:['件','个','本','只'],p:'Nà jiàn yīfu wǒ bāng nǐ xǐ le.',e:'I washed that piece of clothing for you.'},
+    {l:'Lesson 11',q:['一','朋友。'],a:'个',choices:['个','件','张','只'],p:'Yí ge péngyou.',e:'A friend.'},
+    {l:'Lesson 5',q:['您贵','？'],a:'姓',choices:['姓','名','贵','请'],p:'Nín guì xìng?',e:'May I ask your surname?'},
+    {l:'Lesson 5',q:['晚上你有没有','？'],a:'空儿',choices:['空儿','时间','电影','公园'],p:'Wǎnshang nǐ yǒu méiyǒu kòngr?',e:'Do you have free time this evening?'}
+  ];
+
+  // ---------- subject word packs (accurate, instant — no translation needed) ----------
+  const TOPIC_PACKS={
+    'Greetings & Politeness':[['hello','你好','nǐ hǎo'],['goodbye','再见','zàijiàn'],['thank you','谢谢','xièxie'],["you're welcome",'不客气','bú kèqi'],['sorry','对不起','duìbuqǐ'],["it's okay",'没关系','méi guānxi'],['please','请','qǐng'],['excuse me / may I ask','请问','qǐngwèn'],['good morning','早上好','zǎoshang hǎo'],['yes','是','shì'],['no','不','bù']],
+    'Numbers':[['one','一','yī'],['two','二','èr'],['three','三','sān'],['four','四','sì'],['five','五','wǔ'],['six','六','liù'],['seven','七','qī'],['eight','八','bā'],['nine','九','jiǔ'],['ten','十','shí'],['hundred','百','bǎi'],['thousand','千','qiān']],
+    'Colors':[['red','红色','hóngsè'],['orange','橙色','chéngsè'],['yellow','黄色','huángsè'],['green','绿色','lǜsè'],['blue','蓝色','lánsè'],['purple','紫色','zǐsè'],['pink','粉红色','fěnhóngsè'],['black','黑色','hēisè'],['white','白色','báisè'],['gray','灰色','huīsè'],['brown','棕色','zōngsè']],
+    'Family & People':[['mother','妈妈','māma'],['father','爸爸','bàba'],['older brother','哥哥','gēge'],['younger brother','弟弟','dìdi'],['older sister','姐姐','jiějie'],['younger sister','妹妹','mèimei'],['son','儿子','érzi'],['daughter','女儿','nǚ’ér'],['grandfather','爷爷','yéye'],['grandmother','奶奶','nǎinai'],['friend','朋友','péngyou'],['husband','丈夫','zhàngfu'],['wife','妻子','qīzi']],
+    'Food & Drink':[['rice','米饭','mǐfàn'],['noodles','面条','miàntiáo'],['bread','面包','miànbāo'],['egg','鸡蛋','jīdàn'],['meat','肉','ròu'],['fish','鱼','yú'],['soup','汤','tāng'],['water','水','shuǐ'],['tea','茶','chá'],['coffee','咖啡','kāfēi'],['milk','牛奶','niúnǎi'],['beer','啤酒','píjiǔ']],
+    'Fruits & Vegetables':[['apple','苹果','píngguǒ'],['banana','香蕉','xiāngjiāo'],['orange','橙子','chéngzi'],['watermelon','西瓜','xīguā'],['grape','葡萄','pútáo'],['strawberry','草莓','cǎoméi'],['tomato','西红柿','xīhóngshì'],['potato','土豆','tǔdòu'],['carrot','胡萝卜','húluóbo'],['cabbage','白菜','báicài']],
+    'Household Items':[['table','桌子','zhuōzi'],['chair','椅子','yǐzi'],['bed','床','chuáng'],['sofa','沙发','shāfā'],['lamp','灯','dēng'],['door','门','mén'],['window','窗户','chuānghu'],['cup','杯子','bēizi'],['bowl','碗','wǎn'],['chopsticks','筷子','kuàizi'],['clock','钟','zhōng'],['key','钥匙','yàoshi']],
+    'Rooms in a Home':[['home','家','jiā'],['bedroom','卧室','wòshì'],['kitchen','厨房','chúfáng'],['bathroom','卫生间','wèishēngjiān'],['living room','客厅','kètīng'],['room','房间','fángjiān'],['garden','花园','huāyuán'],['garage','车库','chēkù']],
+    'Clothing':[['clothes','衣服','yīfu'],['shirt','衬衫','chènshān'],['pants','裤子','kùzi'],['dress','连衣裙','liányīqún'],['skirt','裙子','qúnzi'],['shoes','鞋','xié'],['socks','袜子','wàzi'],['hat','帽子','màozi'],['coat','外套','wàitào'],['glasses','眼镜','yǎnjìng']],
+    'Body & Health':[['head','头','tóu'],['eye','眼睛','yǎnjing'],['ear','耳朵','ěrduo'],['nose','鼻子','bízi'],['mouth','嘴','zuǐ'],['hand','手','shǒu'],['foot','脚','jiǎo'],['hair','头发','tóufa'],['tooth','牙齿','yáchǐ'],['doctor','医生','yīshēng'],['hospital','医院','yīyuàn'],['sick','生病','shēngbìng']],
+    'Sports & Fitness':[['sports','运动','yùndòng'],['soccer','足球','zúqiú'],['basketball','篮球','lánqiú'],['tennis','网球','wǎngqiú'],['table tennis','乒乓球','pīngpāngqiú'],['swimming','游泳','yóuyǒng'],['running','跑步','pǎobù'],['yoga','瑜伽','yújiā'],['skiing','滑雪','huáxuě'],['gym','健身房','jiànshēnfáng']],
+    'Musical Instruments':[['music','音乐','yīnyuè'],['piano','钢琴','gāngqín'],['guitar','吉他','jítā'],['violin','小提琴','xiǎotíqín'],['cello','大提琴','dàtíqín'],['drum','鼓','gǔ'],['flute','长笛','chángdí'],['erhu','二胡','èrhú'],['to sing','唱歌','chànggē'],['song','歌','gē']],
+    'Animals':[['dog','狗','gǒu'],['cat','猫','māo'],['bird','鸟','niǎo'],['horse','马','mǎ'],['cow','牛','niú'],['pig','猪','zhū'],['sheep','羊','yáng'],['chicken','鸡','jī'],['tiger','老虎','lǎohǔ'],['rabbit','兔子','tùzi'],['panda','熊猫','xióngmāo'],['dragon','龙','lóng']],
+    'Nature & Weather':[['sky','天空','tiānkōng'],['sun','太阳','tàiyáng'],['moon','月亮','yuèliang'],['star','星星','xīngxing'],['rain','雨','yǔ'],['snow','雪','xuě'],['wind','风','fēng'],['cloud','云','yún'],['mountain','山','shān'],['river','河','hé'],['sea','海','hǎi'],['tree','树','shù'],['flower','花','huā'],['hot','热','rè'],['cold','冷','lěng']],
+    'Time & Calendar':[['today','今天','jīntiān'],['tomorrow','明天','míngtiān'],['yesterday','昨天','zuótiān'],['now','现在','xiànzài'],['morning','早上','zǎoshang'],['noon','中午','zhōngwǔ'],['evening','晚上','wǎnshang'],['hour','小时','xiǎoshí'],['minute','分钟','fēnzhōng'],['week','星期','xīngqī'],['month','月','yuè'],['year','年','nián']],
+    'Travel & Transport':[['car','汽车','qìchē'],['bus','公共汽车','gōnggòng qìchē'],['train','火车','huǒchē'],['airplane','飞机','fēijī'],['subway','地铁','dìtiě'],['taxi','出租车','chūzūchē'],['bicycle','自行车','zìxíngchē'],['ticket','票','piào'],['airport','机场','jīchǎng'],['station','车站','chēzhàn'],['hotel','酒店','jiǔdiàn']],
+    'Places in Town':[['school','学校','xuéxiào'],['hospital','医院','yīyuàn'],['restaurant','饭馆','fànguǎn'],['shop','商店','shāngdiàn'],['bank','银行','yínháng'],['park','公园','gōngyuán'],['library','图书馆','túshūguǎn'],['cinema','电影院','diànyǐngyuàn'],['supermarket','超市','chāoshì'],['post office','邮局','yóujú']],
+    'School & Work':[['teacher','老师','lǎoshī'],['student','学生','xuésheng'],['book','书','shū'],['pen','笔','bǐ'],['paper','纸','zhǐ'],['homework','作业','zuòyè'],['exam','考试','kǎoshì'],['class','课','kè'],['work','工作','gōngzuò'],['office','办公室','bàngōngshì'],['company','公司','gōngsī'],['money','钱','qián']],
+    'Technology':[['cell phone','手机','shǒujī'],['computer','电脑','diànnǎo'],['internet','网络','wǎngluò'],['email','电子邮件','diànzǐ yóujiàn'],['television','电视','diànshì'],['camera','相机','xiàngjī'],['software','软件','ruǎnjiàn'],['website','网站','wǎngzhàn']],
+    'Feelings & Adjectives':[['happy','高兴','gāoxìng'],['sad','难过','nánguò'],['angry','生气','shēngqì'],['tired','累','lèi'],['busy','忙','máng'],['big','大','dà'],['small','小','xiǎo'],['good','好','hǎo'],['beautiful','漂亮','piàoliang'],['delicious','好吃','hǎochī'],['expensive','贵','guì'],['cheap','便宜','piányi']],
+    'Common Verbs':[['to eat','吃','chī'],['to drink','喝','hē'],['to go','去','qù'],['to come','来','lái'],['to see','看','kàn'],['to speak','说','shuō'],['to listen','听','tīng'],['to read','读','dú'],['to write','写','xiě'],['to buy','买','mǎi'],['to love','爱','ài'],['to want','要','yào'],['to like','喜欢','xǐhuan']],
+    'Countries & Nationalities':[['China','中国','Zhōngguó'],['America','美国','Měiguó'],['England','英国','Yīngguó'],['France','法国','Fǎguó'],['Germany','德国','Déguó'],['Japan','日本','Rìběn'],['Korea','韩国','Hánguó'],['Russia','俄罗斯','Éluósī'],['Canada','加拿大','Jiānádà'],['Chinese person','中国人','Zhōngguórén'],['foreigner','外国人','wàiguórén']],
+    'Languages':[['Chinese (language)','汉语','Hànyǔ'],['Mandarin','普通话','pǔtōnghuà'],['English','英语','Yīngyǔ'],['French','法语','Fǎyǔ'],['Japanese','日语','Rìyǔ'],['Korean','韩语','Hányǔ'],['Spanish','西班牙语','Xībānyáyǔ'],['language','语言','yǔyán']],
+    'Jobs & Professions':[['teacher','老师','lǎoshī'],['doctor','医生','yīshēng'],['nurse','护士','hùshi'],['worker','工人','gōngrén'],['farmer','农民','nóngmín'],['driver','司机','sījī'],['police officer','警察','jǐngchá'],['chef','厨师','chúshī'],['waiter','服务员','fúwùyuán'],['lawyer','律师','lǜshī'],['engineer','工程师','gōngchéngshī'],['businessperson','商人','shāngrén']],
+    'Days of the Week':[['Monday','星期一','xīngqīyī'],['Tuesday','星期二','xīngqī’èr'],['Wednesday','星期三','xīngqīsān'],['Thursday','星期四','xīngqīsì'],['Friday','星期五','xīngqīwǔ'],['Saturday','星期六','xīngqīliù'],['Sunday','星期天','xīngqītiān'],['weekend','周末','zhōumò']],
+    'Months':[['January','一月','yīyuè'],['February','二月','èryuè'],['March','三月','sānyuè'],['April','四月','sìyuè'],['May','五月','wǔyuè'],['June','六月','liùyuè'],['July','七月','qīyuè'],['August','八月','bāyuè'],['September','九月','jiǔyuè'],['October','十月','shíyuè'],['November','十一月','shíyīyuè'],['December','十二月','shí’èryuè']],
+    'Seasons':[['spring','春天','chūntiān'],['summer','夏天','xiàtiān'],['autumn','秋天','qiūtiān'],['winter','冬天','dōngtiān'],['season','季节','jìjié']],
+    'Question Words':[['what','什么','shénme'],['who','谁','shéi'],['where','哪儿','nǎr'],['when','什么时候','shénme shíhou'],['why','为什么','wèishénme'],['how','怎么','zěnme'],['which','哪个','nǎge'],['how much / many','多少','duōshao'],['how many (few)','几','jǐ']],
+    'Pronouns':[['I / me','我','wǒ'],['you','你','nǐ'],['you (polite)','您','nín'],['he / him','他','tā'],['she / her','她','tā'],['we / us','我们','wǒmen'],['you (plural)','你们','nǐmen'],['they','他们','tāmen'],['this','这','zhè'],['that','那','nà']],
+    'Directions & Location':[['left','左','zuǒ'],['right','右','yòu'],['above','上面','shàngmiàn'],['below','下面','xiàmiàn'],['front','前面','qiánmiàn'],['behind','后面','hòumiàn'],['inside','里面','lǐmiàn'],['outside','外面','wàimiàn'],['middle','中间','zhōngjiān'],['east','东','dōng'],['west','西','xī'],['south','南','nán'],['north','北','běi']],
+    'Restaurant & Ordering':[['restaurant','饭馆','fànguǎn'],['menu','菜单','càidān'],['to order food','点菜','diǎncài'],['the bill','买单','mǎidān'],['hungry','饿','è'],['thirsty','渴','kě'],['full (satiated)','饱','bǎo'],['spicy','辣','là'],['dish (food)','菜','cài'],['waiter','服务员','fúwùyuán']],
+    'Shopping & Money':[['money','钱','qián'],['how much money','多少钱','duōshao qián'],['expensive','贵','guì'],['cheap','便宜','piányi'],['to buy','买','mǎi'],['to sell','卖','mài'],['yuan (RMB)','元','yuán'],['cash','现金','xiànjīn'],['credit card','信用卡','xìnyòngkǎ'],['change (money)','零钱','língqián']],
+    'Beverages':[['water','水','shuǐ'],['tea','茶','chá'],['coffee','咖啡','kāfēi'],['milk','牛奶','niúnǎi'],['juice','果汁','guǒzhī'],['beer','啤酒','píjiǔ'],['wine','葡萄酒','pútáojiǔ'],['cola','可乐','kělè'],['hot water','热水','rèshuǐ']],
+    'Flavors & Tastes':[['sweet','甜','tián'],['sour','酸','suān'],['bitter','苦','kǔ'],['spicy','辣','là'],['salty','咸','xián'],['delicious','好吃','hǎochī'],['taste / flavor','味道','wèidao']],
+    'Weather Expressions':[['weather','天气','tiānqì'],['sunny','晴天','qíngtiān'],['cloudy','阴天','yīntiān'],['to rain','下雨','xiàyǔ'],['to snow','下雪','xiàxuě'],['windy','刮风','guāfēng'],['warm','暖和','nuǎnhuo'],['cool','凉快','liángkuai'],['temperature','温度','wēndù']],
+    'Daily Routine':[['to get up','起床','qǐchuáng'],['to sleep','睡觉','shuìjiào'],['to eat (a meal)','吃饭','chīfàn'],['to study','学习','xuéxí'],['to brush teeth','刷牙','shuāyá'],['to shower','洗澡','xǐzǎo'],['to rest','休息','xiūxi'],['to go to work','上班','shàngbān'],['to go home','回家','huíjiā']],
+    'Hobbies & Leisure':[['to read books','看书','kànshū'],['to watch TV','看电视','kàn diànshì'],['to listen to music','听音乐','tīng yīnyuè'],['to travel','旅游','lǚyóu'],['to take photos','照相','zhàoxiàng'],['to dance','跳舞','tiàowǔ'],['to draw','画画','huàhuà'],['to cook','做饭','zuòfàn'],['to play games','玩游戏','wán yóuxì']],
+    'Describing People':[['tall','高','gāo'],['short (height)','矮','ǎi'],['fat','胖','pàng'],['thin','瘦','shòu'],['beautiful','漂亮','piàoliang'],['handsome','帅','shuài'],['clever','聪明','cōngming'],['kind','善良','shànliáng'],['young','年轻','niánqīng'],['cute','可爱','kě’ài']],
+    'Illness & Symptoms':[['to be sick','生病','shēngbìng'],['fever','发烧','fāshāo'],['cough','咳嗽','késou'],['a cold','感冒','gǎnmào'],['headache','头疼','tóuténg'],['stomachache','肚子疼','dùzi téng'],['medicine','药','yào'],['to hurt / ache','疼','téng'],['to see a doctor','看病','kànbìng']],
+    'Phone & Communication':[['telephone','电话','diànhuà'],['to make a call','打电话','dǎ diànhuà'],['text message','短信','duǎnxìn'],['WeChat','微信','wēixìn'],['number','号码','hàomǎ'],['to send','发','fā'],['to receive','收','shōu'],['online','网上','wǎngshàng']],
+    'Holidays & Festivals':[['festival','节日','jiérì'],['Spring Festival','春节','Chūnjié'],['New Year','新年','xīnnián'],['Mid-Autumn Festival','中秋节','Zhōngqiūjié'],['National Day','国庆节','Guóqìngjié'],['birthday','生日','shēngrì'],['to celebrate','庆祝','qìngzhù'],['gift','礼物','lǐwù'],['red envelope','红包','hóngbāo']],
+    'More Adjectives':[['new','新','xīn'],['old (things)','旧','jiù'],['fast','快','kuài'],['slow','慢','màn'],['long','长','cháng'],['short (length)','短','duǎn'],['many','多','duō'],['few','少','shǎo'],['easy','容易','róngyì'],['difficult','难','nán'],['clean','干净','gānjìng'],['dirty','脏','zāng']],
+    'Modal Verbs':[['can (skill)','会','huì'],['can / may','可以','kěyǐ'],['can (able to)','能','néng'],['should','应该','yīnggāi'],['to want to','要','yào'],['would like','想','xiǎng'],['to need','需要','xūyào'],['to hope','希望','xīwàng']],
+    'Kitchen & Cooking':[['to cook','做饭','zuòfàn'],['pot','锅','guō'],['knife','刀','dāo'],['plate','盘子','pánzi'],['oil','油','yóu'],['salt','盐','yán'],['sugar','糖','táng'],['soy sauce','酱油','jiàngyóu'],['to stir-fry','炒','chǎo'],['refrigerator','冰箱','bīngxiāng']],
+    'Banking':[['bank','银行','yínháng'],['to change money','换钱','huànqián'],['ATM','取款机','qǔkuǎnjī'],['to withdraw money','取钱','qǔqián'],['to deposit money','存钱','cúnqián'],['RMB','人民币','rénmínbì'],['US dollar','美元','měiyuán'],['account','账户','zhànghù']],
+    'Measure Words':[['general measure word','个','gè'],['for books','本','běn'],['for flat objects','张','zhāng'],['for animals','只','zhī'],['for clothes or matters','件','jiàn'],['for cups','杯','bēi'],['for bottles','瓶','píng'],['for pairs','双','shuāng'],['for long thin things','条','tiáo']]
+  };
+
+  // ---------- pinyin ----------
+  function toPinyin(h){ try{ if(!window.__pinyinFailed && window.pinyinPro && window.pinyinPro.pinyin) return window.pinyinPro.pinyin(h,{toneType:'symbol'}); }catch(e){} return ''; }
+
+  // ---------- deck ----------
+  let deck=load();
+  function mkCard(o,i,src){ return {id:(src||'v')+i+'_'+(o.h||'').length, en:o.en, options:[{hanzi:o.h,py:o.p||toPinyin(o.h)}], lesson:o.l||'My Words', topic:o.t||'Other', pic:!!o.pic, known:false, seed:(i*37+13)%99999}; }
+  function seed(){ return VOCAB.map((o,i)=>mkCard(o,i,'s')); }
+  function load(){ try{ const r=localStorage.getItem(KEY); if(r){ const d=JSON.parse(r); if(Array.isArray(d)&&d.length) return d; } }catch(e){} return seed(); }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(deck)); }catch(e){} }
+
+  // remember where the user left off (mode, direction, filters, current card)
+  const SKEY='zh_hsk_state';
+  function saveState(){ try{ const cards=visibleCards(); const cur=cards[idx]; localStorage.setItem(SKEY, JSON.stringify({mode:mode,dir:dir,lessonF:lessonF,topicF:topicF,unknownOnly:unknownOnly,gIdx:gIdx,round:round,cardId:cur?cur.id:null})); }catch(e){} }
+  function loadState(){ try{ const s=JSON.parse(localStorage.getItem(SKEY)); if(s&&typeof s==='object'){ if(s.mode) mode=s.mode; if(s.dir) dir=s.dir; if(s.lessonF) lessonF=s.lessonF; if(s.topicF) topicF=s.topicF; unknownOnly=!!s.unknownOnly; if(typeof s.gIdx==='number') gIdx=s.gIdx; if(typeof s.round==='number') round=s.round; return s.cardId||null; } }catch(e){} return null; }
+
+  // ---------- state ----------
+  let mode='cards';
+  let idx=0, flipped=false, dir='en2zh', unknownOnly=false, lessonF='All', topicF='All';
+  let gIdx=0, showProblemsOnly=false, showFlaggedOnly=false, resumeCardId=null, round=0;
+
+  function setStatus(m,err){ const s=$('#status'); s.textContent=m||''; s.className='status'+(err?' err':''); }
+
+  // ---------- mode switching ----------
+  function setMode(m){
+    mode=m;
+    ['cards','grammar','match','fill','packs','manage'].forEach(v=>{ $('#view-'+v).style.display = v===m?'block':'none'; });
+    document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-mode')===m));
+    if(m==='cards'){ renderCardsTools(); renderCard(); }
+    else if(m==='grammar'){ renderGrammarTools(); renderGrammar(); }
+    else if(m==='match'){ newMatch(); }
+    else if(m==='fill'){ newFill(); }
+    else if(m==='packs'){ renderPacks(); }
+    else if(m==='manage'){ renderList(); }
+    saveState();
+  }
+  function renderPacks(){
+    const have=new Set(deck.map(c=>(c.options&&c.options[0]&&c.options[0].hanzi)||''));
+    let html='<div class="packgrid">';
+    Object.keys(TOPIC_PACKS).forEach(n=>{
+      const items=TOPIC_PACKS[n];
+      const got=items.filter(it=>have.has(it[1])).length;
+      const sample=items.slice(0,4).map(it=>it[1]).join(' ');
+      const done=got>=items.length;
+      html+='<div class="packtile"><div class="pkname">'+esc(n)+'</div><div class="pksample">'+esc(sample)+'…</div>'+
+        '<div class="pkmeta">'+items.length+' words'+(got&&!done?(' · '+got+' added'):'')+'</div>'+
+        '<button class="btn pkadd'+(done?' done':'')+'" data-pack="'+encodeURIComponent(n)+'">'+(done?'Added ✓':'➕ Add')+'</button></div>';
+    });
+    html+='</div>';
+    $('#packsStage').innerHTML=html;
+  }
+  function addPack(name){
+    const items=TOPIC_PACKS[name]||[]; let added=0;
+    const have=new Set(deck.map(c=>(c.options&&c.options[0]&&c.options[0].hanzi)||''));
+    items.forEach((it,i)=>{ const h=it[1]; if(have.has(h)) return; deck.push({id:'p'+Date.now()+'_'+i+'_'+name.length, en:it[0], options:[{hanzi:h,py:it[2]}], lesson:name, topic:name, known:false, seed:(i*53+17)%99999, pic:false}); have.add(h); added++; });
+    if(added) save();
+    return added;
+  }
+
+  // ---------- cards ----------
+  function lessons(){ return Array.from(new Set(deck.map(c=>c.lesson))).sort(); }
+  function topics(){ return Array.from(new Set(deck.map(c=>c.topic))).sort(); }
+  function visibleCards(){
+    let cs=deck.slice();
+    if(lessonF!=='All') cs=cs.filter(c=>c.lesson===lessonF);
+    if(topicF!=='All') cs=cs.filter(c=>c.topic===topicF);
+    if(unknownOnly) cs=cs.filter(c=>!c.known);
+    else cs=cs.filter(c=>!c.known || ((round%3)===((c.knownPhase||0)%3))); // known cards only every 3rd round
+    return cs;
+  }
+  function renderCardsTools(){
+    const lz=lessons(), tp=topics();
+    $('#cardsTools').innerHTML=
+      '<div class="seg" id="dirSeg">'+
+        '<button data-dir="en2zh" class="'+(dir==='en2zh'?'active':'')+'">EN→中</button>'+
+        '<button data-dir="zh2en" class="'+(dir==='zh2en'?'active':'')+'">中→EN</button>'+
+        '<button data-dir="listen" class="'+(dir==='listen'?'active':'')+'">🔊 Listen</button>'+
+      '</div>'+
+      '<select class="flt" id="lessonF"><option>All</option>'+lz.map(l=>'<option'+(l===lessonF?' selected':'')+'>'+esc(l)+'</option>').join('')+'</select>'+
+      '<select class="flt" id="topicF"><option>All</option>'+tp.map(t=>'<option'+(t===topicF?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select>'+
+      '<button class="toggle'+(unknownOnly?' on':'')+'" id="unkT">'+(unknownOnly?'To-learn':'All cards')+'</button>';
+  }
+  function renderCard(){
+    const stage=$('#cardsStage'); const cards=visibleCards();
+    if(!cards.length){ stage.innerHTML='<div class="empty">No cards in this filter.<br>Try a different lesson/topic, or add words in <b>Manage</b>.</div>'; return; }
+    if(resumeCardId){ const k=cards.findIndex(x=>x.id===resumeCardId); if(k>=0) idx=k; resumeCardId=null; }
+    if(idx>=cards.length) idx=cards.length-1; if(idx<0) idx=0;
+    const c=cards[idx]; const o=c.options[0];
+    const bigZh=c.options.map(op=>'<div class="opt2"><div class="bighz2">'+esc(op.hanzi)+'</div>'+(op.py?'<div class="py2">'+esc(op.py)+'</div>':'')+'<button class="spk" data-say="'+encodeURIComponent(op.hanzi)+'" style="margin-top:10px">🔊</button></div>').join('');
+    let front, back;
+    if(dir==='zh2en'){
+      front='<span class="tag">Chinese</span><span class="lz-pill">'+esc(c.lesson)+'</span><div class="bighz">'+esc(o.hanzi)+'</div><button class="spk" style="margin-top:18px" data-say="'+encodeURIComponent(o.hanzi)+'">🔊</button><div class="hint">tap for meaning</div>';
+      back='<span class="tag">Meaning</span><div class="stack"><div class="bighz2">'+esc(c.en)+'</div><div class="py2">'+esc(o.py)+'</div><div class="example" id="exBox"></div></div>';
+    } else if(dir==='listen'){
+      front='<span class="tag">Listen</span><span class="lz-pill">'+esc(c.lesson)+'</span><button class="spk listenbtn" data-say="'+encodeURIComponent(o.hanzi)+'">🔊</button><div class="hint">tap 🔊, then tap card to reveal</div>';
+      back='<span class="tag">Chinese</span><div class="stack">'+bigZh+'<div class="meaning">'+esc(c.en)+'</div><div class="example" id="exBox"></div></div>';
+    } else {
+      front='<span class="tag">English</span><span class="cat-pill">'+esc(c.topic)+'</span><div class="en">'+esc(c.en)+'</div><div class="hint">tap to reveal Chinese</div>';
+      back='<span class="tag">Chinese</span><div class="stack">'+bigZh+'<div class="meaning">'+esc(c.en)+'</div><div class="example" id="exBox"></div></div>';
+    }
+    stage.innerHTML='<div class="card-wrap"><div class="card'+(flipped?' flipped':'')+'" id="card"><div class="face front">'+front+'</div><div class="face back">'+back+'</div></div></div>'+
+      '<div class="controls"><button class="nav" data-nav="-1">‹ Prev</button><button class="nav" data-nav="flip">Flip</button><button class="nav" data-nav="1">Next ›</button></div>'+
+      '<div class="judge"><button class="dont" data-judge="0">✗ Still learning</button><button class="know" data-judge="1">✓ I know it</button></div>'+
+      '<div class="judge" style="margin-top:8px"><button class="flagbtn'+(c.flagged?' on':'')+'" data-flag="'+c.id+'">'+(c.flagged?'🚩 Flagged as incorrect':'🚩 Flag as incorrect')+'</button></div>'+
+      '<div class="counter">'+(idx+1)+' / '+cards.length+'   ·   round '+(round+1)+'   ·   known '+deck.filter(x=>x.known).length+' / '+deck.length+(c.known?'   ·   ✓ (shows every 3rd round)':'')+'</div>';
+    if(dir==='listen'){ setTimeout(()=>speak(o.hanzi),250); }
+    saveState();
+  }
+  function move(d){
+    let cards=visibleCards(); if(!cards.length) return;
+    let n=idx+d;
+    if(n>=cards.length){ round++; cards=visibleCards(); if(!cards.length){ round=0; cards=visibleCards(); if(!cards.length) return; } n=0; }
+    else if(n<0){ n=cards.length-1; }
+    idx=n; flipped=false; renderCard();
+  }
+
+  // ---------- example sentence on the back ----------
+  function collectStrings(x,out){ if(typeof x==='string') out.push(x); else if(Array.isArray(x)){ for(const y of x) collectStrings(y,out); } }
+  async function realExample(h){
+    try{
+      const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh-CN&tl=en&dt=ex&q='+encodeURIComponent(h));
+      const d=await r.json(); const ss=[]; collectStrings(d,ss);
+      let cands=ss.map(s=>s.replace(/<[^>]+>/g,'').trim()).filter(s=>s.indexOf(h)>=0 && /[。！？]/.test(s) && s.length<=42 && s.length>=h.length+3);
+      cands=Array.from(new Set(cands)).sort((a,b)=>a.length-b.length);
+      return cands[0]||null;
+    }catch(e){ return null; }
+  }
+  async function zhToEn(zh){ try{ const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh-CN&tl=en&dt=t&q='+encodeURIComponent(zh)); const d=await r.json(); return (d[0]||[]).map(s=>s&&s[0]?s[0]:'').join(''); }catch(e){ return ''; } }
+  const ADJSET=new Set(['big','small','good','bad','beautiful','delicious','expensive','cheap','happy','sad','angry','tired','busy','new','old','fast','slow','long','short','many','few','easy','difficult','clean','dirty','tall','fat','thin','clever','kind','young','cute','hot','cold','warm','cool','sweet','sour','bitter','spicy','salty','handsome','red','blue','green','yellow','black','white','pink','purple','brown']);
+  async function geminiExample(c){
+    const key=getGemKey(); if(!key) return null;
+    const h=c.options[0].hanzi;
+    const prompt='Word: "'+(c.en||'')+'" (Chinese: '+h+'). Write ONE short, natural example sentence in simplified Chinese (8–14 characters) using '+h+' in the situation where this word is most commonly used in daily life. Reply with ONLY JSON: {"zh":"...","py":"pinyin with tone marks","en":"English translation"}';
+    const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+encodeURIComponent(key);
+    const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
+    if(!resp.ok) throw new Error('Gemini '+resp.status);
+    const d=await resp.json();
+    let t=((((d.candidates||[])[0]||{}).content||{}).parts||[]).map(p=>p.text||'').join('');
+    t=t.replace(/```json|```/g,'').trim();
+    const m=t.match(/\{[\s\S]*\}/); if(!m) return null;
+    const o=JSON.parse(m[0]);
+    if(!o.zh||o.zh.indexOf(h)<0) return null;
+    return {zh:o.zh, py:o.py||toPinyin(o.zh), en:o.en||''};
+  }
+  async function makeExample(c){
+    const h=c.options&&c.options[0]&&c.options[0].hanzi; if(!h) return null;
+    // best: a "most common context" sentence from Gemini (when a key is set and has quota)
+    if(getGemKey()){ try{ const g=await geminiExample(c); if(g) return g; }catch(e){} }
+    let zh=await realExample(h);
+    if(!zh){
+      const base=(c.en||'').split(/[;,(\/]/)[0].trim().toLowerCase(); if(!base) return null;
+      let sent;
+      if(/^to /.test(base)) sent='I often '+base.slice(3)+'.';
+      else if(ADJSET.has(base)) sent='It is very '+base+'.';
+      else sent='This is my '+base+'.';
+      try{ const opts=await translate(sent); if(opts.length) zh=opts[0].hanzi; }catch(e){}
+    }
+    if(!zh) return null;
+    return {zh:zh, py:toPinyin(zh), en:await zhToEn(zh)};
+  }
+  function exHtml(ex){ return ex?('<div class="exzh">'+esc(ex.zh)+' <button class="spk" style="font-size:14px;padding:3px 8px;vertical-align:middle" data-say="'+encodeURIComponent(ex.zh)+'">🔊</button></div><div class="expy">'+esc(ex.py)+'</div>'+(ex.en?'<div class="exen">'+esc(ex.en)+'</div>':'')):''; }
+  function paintExample(c){ const box=$('#exBox'); if(!box) return; box.innerHTML = c.ex? exHtml(c.ex) : '<span class="exnote">no example available (needs internet)</span>'; }
+  async function ensureExample(c){
+    if(c.ex){ paintExample(c); return; }
+    if(c.exTried){ paintExample(c); return; }
+    const box=$('#exBox'); if(box) box.innerHTML='<span class="exnote">loading example…</span>';
+    const ex=await makeExample(c); c.exTried=true; if(ex){ c.ex=ex; save(); }
+    const cur=visibleCards()[idx]; if(cur&&cur.id===c.id&&flipped) paintExample(c);
+  }
+  function flipCard(){ flipped=!flipped; const cd=$('#card'); if(cd) cd.classList.toggle('flipped'); if(flipped){ const c=visibleCards()[idx]; if(c) ensureExample(c); } else{ const box=$('#exBox'); if(box) box.innerHTML=''; } }
+
+  // ---------- grammar ----------
+  function grammarList(){ return lessonF==='All'?GRAMMAR:GRAMMAR.filter(g=>g.lesson===lessonF); }
+  function renderGrammarTools(){
+    const lz=Array.from(new Set(GRAMMAR.map(g=>g.lesson))).sort();
+    $('#grammarTools').innerHTML='<select class="flt" id="glessonF"><option>All</option>'+lz.map(l=>'<option'+(l===lessonF?' selected':'')+'>'+esc(l)+'</option>').join('')+'</select>';
+  }
+  function renderGrammar(){
+    const list=grammarList(); const stage=$('#grammarStage');
+    if(!list.length){ stage.innerHTML='<div class="empty">No grammar points for this lesson.</div>'; return; }
+    if(gIdx>=list.length) gIdx=0; if(gIdx<0) gIdx=list.length-1;
+    const g=list[gIdx];
+    const ex=g.ex.map(x=>'<div class="row2"><div style="flex:1"><div class="hz">'+esc(x.h)+'</div><div class="py">'+esc(x.p)+'</div><div class="em">'+esc(x.e)+'</div></div><button class="spk" data-say="'+encodeURIComponent(x.h)+'">🔊</button></div>').join('');
+    stage.innerHTML='<div class="gcard"><div class="gpt">'+esc(g.point)+'</div><div class="gpat">'+esc(g.pattern)+'</div><div class="grule">'+esc(g.rule)+'</div><div class="gex">'+ex+'</div></div>'+
+      '<div class="controls" style="max-width:420px"><button class="nav" data-gnav="-1">‹ Prev</button><button class="nav" data-gnav="1">Next ›</button></div>'+
+      '<div class="counter">'+(gIdx+1)+' / '+list.length+' grammar points · '+esc(g.lesson)+'</div>';
+  }
+
+  // ---------- match game ----------
+  let matchState=null;
+  function picPool(){ return deck.slice(); }
+  function newMatch(){
+    const pool=picPool();
+    if(pool.length<4){ $('#matchStage').innerHTML='<div class="empty">Need at least 4 picture words. Add more in Manage.</div>'; return; }
+    const sc=matchState?matchState.score:{right:0,total:0};
+    const target=pool[Math.floor(Math.random()*pool.length)];
+    const others=shuffle(pool.filter(c=>c.id!==target.id)).slice(0,3);
+    const choices=shuffle([target].concat(others));
+    matchState={target,choices,score:sc,answered:false};
+    renderMatch();
+  }
+  function renderMatch(){
+    const s=matchState; if(!s) return;
+    const ch=s.choices.map(c=>'<button class="choice" data-mid="'+c.id+'">'+esc(c.options[0].hanzi)+'<span class="cpy">'+esc(c.options[0].py)+'</span></button>').join('');
+    $('#matchStage').innerHTML='<div class="game"><div class="score">Score '+s.score.right+' / '+s.score.total+'</div>'+
+      '<div class="qprompt" style="font-size:30px;font-weight:800;margin:18px 0 8px">'+esc(s.target.en)+'</div>'+
+      '<div class="qhint">Which characters match this word?</div>'+
+      '<div class="choices" id="matchChoices">'+ch+'</div>'+
+      '<div class="reveal" id="matchReveal"></div>'+
+      '<div class="gamebtns"><button class="ghost" data-mskip="1">Skip</button><button class="primary" id="matchNext" style="display:none">Next ›</button></div></div>';
+  }
+  function answerMatch(id){
+    const s=matchState; if(!s||s.answered) return; s.answered=true; s.score.total++;
+    const correct=s.target.id===id; if(correct) s.score.right++;
+    document.querySelectorAll('#matchChoices .choice').forEach(b=>{
+      const bid=b.getAttribute('data-mid'); b.disabled=true;
+      if(bid===s.target.id) b.classList.add('correct');
+      else if(bid===id) b.classList.add('wrong');
+    });
+    $('#matchReveal').innerHTML=(correct?'✓ Correct! ':'✗ ')+'<b>'+esc(s.target.options[0].hanzi)+'</b> '+esc(s.target.options[0].py)+' — '+esc(s.target.en);
+    speak(s.target.options[0].hanzi);
+    $('#matchNext').style.display='block';
+    $('.score') && ($('#matchStage .score').textContent='Score '+s.score.right+' / '+s.score.total);
+  }
+
+  // ---------- fill game ----------
+  let fillState=null;
+  function fillPool(){ return FILL; }
+  function newFill(){
+    const pool=fillPool(); const sc=fillState?fillState.score:{right:0,total:0};
+    const item=pool[Math.floor(Math.random()*pool.length)];
+    fillState={item,choices:shuffle(item.choices.slice()),score:sc,answered:false};
+    renderFill();
+  }
+  function renderFill(){
+    const s=fillState; if(!s) return; const it=s.item;
+    const prompt=esc(it.q[0])+'<span class="blank" id="fblank">　</span>'+esc(it.q[1]);
+    const ch=s.choices.map(c=>'<button class="choice" data-fans="'+encodeURIComponent(c)+'">'+esc(c)+'</button>').join('');
+    $('#fillStage').innerHTML='<div class="game"><div class="score">Score '+s.score.right+' / '+s.score.total+' · '+esc(it.lesson)+'</div>'+
+      '<div class="qprompt">'+prompt+'</div>'+
+      '<div class="qhint">'+esc(it.e)+'</div>'+
+      '<div class="choices" id="fillChoices">'+ch+'</div>'+
+      '<div class="reveal" id="fillReveal"></div>'+
+      '<div class="gamebtns"><button class="ghost" data-fskip="1">Skip</button><button class="primary" id="fillNext" style="display:none">Next ›</button></div></div>';
+  }
+  function answerFill(ans){
+    const s=fillState; if(!s||s.answered) return; s.answered=true; s.score.total++;
+    const correct=ans===s.item.a; if(correct) s.score.right++;
+    const bl=$('#fblank'); if(bl){ bl.textContent=s.item.a; bl.classList.add('filled'); }
+    document.querySelectorAll('#fillChoices .choice').forEach(b=>{
+      const v=decodeURIComponent(b.getAttribute('data-fans')); b.disabled=true;
+      if(v===s.item.a) b.classList.add('correct'); else if(v===ans) b.classList.add('wrong');
+    });
+    $('#fillReveal').innerHTML=(correct?'✓ Correct! ':'✗ Answer: '+esc(s.item.a)+'  ')+'<br>'+esc(s.item.p);
+    speak(s.item.q[0]+s.item.a+s.item.q[1]);
+    $('#fillNext').style.display='block';
+  }
+
+  // ---------- audio ----------
+  function speak(text){ try{ const u=new SpeechSynthesisUtterance(text); u.lang='zh-CN'; u.rate=.85; const vs=speechSynthesis.getVoices(); const v=vs.find(v=>/zh|chinese|普通话|中文/i.test((v.lang||'')+(v.name||''))); if(v) u.voice=v; speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){} }
+
+  // ---------- manage: add / translate ----------
+  function dedupe(a){ const o=[],s=new Set(); a.forEach(x=>{const t=(x||'').trim(); if(t&&!s.has(t)){s.add(t);o.push(t);}}); return o; }
+  async function fetchGoogle(w){ const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&dt=bd&q='+encodeURIComponent(w)); if(!r.ok) throw new Error('g'+r.status); const d=await r.json(); let o=[]; if(Array.isArray(d[0])) o.push(d[0].map(x=>(x&&x[0])?x[0]:'').join('')); if(Array.isArray(d[1])) d[1].forEach(pos=>(pos[1]||[]).forEach(t=>o.push(t))); return dedupe(o).filter(hasZh); }
+  async function fetchMyMemory(w){ const r=await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(w)+'&langpair=en|zh-CN'); const d=await r.json(); let o=[]; if(d.responseData&&d.responseData.translatedText) o.push(d.responseData.translatedText); if(Array.isArray(d.matches)) d.matches.forEach(m=>{if(m.translation)o.push(m.translation);}); return dedupe(o).filter(hasZh); }
+  async function translate(w){ let o=[]; try{o=await fetchGoogle(w);}catch(e){} if(!o.length){try{o=await fetchMyMemory(w);}catch(e){}} return o.slice(0,6).map(h=>({hanzi:h,py:toPinyin(h)})); }
+
+  function splitWords(s){ return dedupe((s||'').split(/[,，;；\n]+/).map(x=>x.trim()).filter(Boolean)); }
+  async function addWord(){
+    const inp=$('#word'); const raw=inp.value.trim(); if(!raw) return;
+    if(hasZh(raw)){
+      const triples=raw.split(/[,，;；\n]+/).map(s=>parseFlexLine(s)).filter(t=>t&&t.h);
+      let n=0;
+      triples.forEach((t,i)=>{ deck.push({id:'u'+Date.now()+'_'+i, en:t.e||t.h, options:[{hanzi:t.h, py:(t.p&&looksPinyin(t.p))?t.p:(toPinyin(t.h)||t.p)}], lesson:'My Words', topic:'Other', pic:false, known:false, seed:Math.floor(Math.random()*99999)}); n++; });
+      if(n){ save(); inp.value=''; setStatus('Added '+n+' card'+(n!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2000); return; }
+    }
+    const words=splitWords(raw); $('#addBtn').disabled=true; let added=0;
+    try{
+      for(let i=0;i<words.length;i++){
+        setStatus(words.length>1?('Translating '+(i+1)+'/'+words.length+': “'+words[i]+'”…'):('Translating “'+words[i]+'”…'));
+        const options=await translate(words[i]);
+        if(options.length){ deck.push({id:'u'+Date.now()+'_'+i, en:words[i], options, lesson:'My Words', topic:'Other', pic:true, known:false, seed:Math.floor(Math.random()*99999)}); added++; }
+      }
+      save(); inp.value='';
+      setStatus(added?('Added '+added+' card'+(added!==1?'s':'')+' ✓'):'No translations found — check your connection.', !added);
+      renderList(); setTimeout(()=>setStatus(''),2000);
+    }catch(e){ setStatus('Error: '+e.message,true); } finally{ $('#addBtn').disabled=false; }
+  }
+
+  // ---------- voice add (speak an English word → card + example) ----------
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  let _rec=null,_listening=false;
+  function micToggle(){
+    if(!SR){ setStatus('Voice input isn’t supported in this browser.',true); return; }
+    if(_listening){ try{_rec.stop();}catch(e){} return; }
+    _rec=new SR(); _rec.lang='en-US'; _rec.interimResults=false; _rec.maxAlternatives=1;
+    _listening=true; $('#micBtn').classList.add('rec'); setStatus('Listening… say an English word');
+    _rec.onresult=ev=>{ const t=((ev.results[0]&&ev.results[0][0]&&ev.results[0][0].transcript)||'').trim(); if(t){ $('#word').value=t; voiceAdd(t); } };
+    _rec.onerror=ev=>{ setStatus(ev.error==='not-allowed'?'Microphone blocked — allow mic access for this page.':'Mic error: '+ev.error,true); };
+    _rec.onend=()=>{ _listening=false; $('#micBtn').classList.remove('rec'); };
+    try{ _rec.start(); }catch(e){ _listening=false; $('#micBtn').classList.remove('rec'); }
+  }
+  async function voiceAdd(word){
+    setStatus('Heard “'+word+'” — translating…');
+    try{
+      const options=await translate(word);
+      if(!options.length){ setStatus('No translation found for “'+word+'” — check connection.',true); return; }
+      const card={id:'v'+Date.now(), en:word, options:options, lesson:'My Words', topic:'Spoken', pic:true, known:false, seed:Math.floor(Math.random()*99999)};
+      deck.push(card); save(); $('#word').value=''; if(mode==='manage') renderList();
+      speak(options[0].hanzi);
+      setStatus('Added '+options[0].hanzi+' ✓ — finding example sentence…');
+      const ex=await makeExample(card); card.exTried=true; if(ex){ card.ex=ex; save(); }
+      setStatus('Added '+options[0].hanzi+(ex?' ✓ with example “'+ex.zh+'”':' ✓ (example will load when you flip the card)'));
+      if(mode==='manage') renderList();
+      setTimeout(()=>setStatus(''),3500);
+    }catch(e){ setStatus('Error: '+e.message,true); }
+  }
+  $('#micBtn').addEventListener('click',micToggle);
+  if(!SR) $('#micBtn').style.display='none';
+
+  // ---------- backup / restore (move your deck between devices or addresses) ----------
+  $('#exportBtn').addEventListener('click',()=>{
+    try{
+      const blob=new Blob([JSON.stringify({app:'chinese-flashcards',when:new Date().toISOString(),deck:deck})],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download='chinese-flashcards-backup.json'; document.body.appendChild(a); a.click(); a.remove();
+      setStatus('Backup file saved ✓ (check Files/Downloads)'); setTimeout(()=>setStatus(''),3000);
+    }catch(e){ setStatus('Backup failed: '+e.message,true); }
+  });
+  $('#importBtn').addEventListener('click',()=>{ $('#importInput').value=''; $('#importInput').click(); });
+  $('#importInput').addEventListener('change',async e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    try{
+      const d=JSON.parse(await f.text());
+      const arr=Array.isArray(d)?d:(d&&Array.isArray(d.deck)?d.deck:null);
+      if(!arr||!arr.length||!arr[0].options) throw new Error('not a flashcards backup file');
+      if(!confirm('Replace the current '+deck.length+' cards with the backup ('+arr.length+' cards)?')) return;
+      deck=arr; save(); renderList(); setStatus('Restored '+arr.length+' cards ✓'); setTimeout(()=>setStatus(''),2500);
+    }catch(err){ setStatus('Restore failed: '+(err.message||err),true); }
+  });
+
+  function renderList(){
+    const v=$('#listView'); if(!deck.length){ v.innerHTML='<div class="empty">No cards.</div>'; return; }
+    const problems=deck.filter(c=>cardIssue(c));
+    const flagged=deck.filter(c=>c.flagged);
+    let bar='';
+    if(problems.length) bar+='⚠ '+problems.length+' need attention · <button class="elink" id="probToggle">'+(showProblemsOnly?'show all':'show only')+'</button>';
+    if(flagged.length) bar+=(bar?'    ':'')+'🚩 '+flagged.length+' flagged · <button class="elink" id="flagToggle">'+(showFlaggedOnly?'show all':'show only')+'</button>';
+    if(!bar) bar='✓ All '+deck.length+' cards have English, characters &amp; pinyin';
+    let html='<div class="probbar">'+bar+'</div>';
+    const list=showFlaggedOnly?flagged:(showProblemsOnly?problems:deck);
+    const groups={}; list.forEach(c=>{ (groups[c.lesson]=groups[c.lesson]||[]).push(c); });
+    Object.keys(groups).sort().forEach(n=>{
+      html+='<div class="grouphdr">'+esc(n)+' · '+groups[n].length+'</div>';
+      html+=groups[n].map(c=>{ const iss=cardIssue(c); const o=(c.options&&c.options[0])||{hanzi:'',py:''};
+        const cls=iss?' bad':(c.flagged?' flag':'');
+        return '<div class="row'+cls+'">'+
+        '<div class="info"><div class="e">'+esc(c.en||'—')+(c.known?' <span class="k">✓</span>':'')+'</div>'+
+        '<div class="c">'+esc(c.options.map(o=>o.hanzi).join('、')||'—')+' <span style="color:#8a8fb5;font-size:13px">'+esc(o.py)+'</span></div>'+
+        '<div class="sub'+(iss?' warn':'')+'">'+(iss?('⚠ '+iss):(esc(c.topic)+' · '+esc(c.lesson)))+'</div></div>'+
+        '<button class="del flagb'+(c.flagged?' on':'')+'" data-flag="'+c.id+'">🚩</button>'+
+        '<button class="del edit" data-edit="'+c.id+'">✏️</button>'+
+        '<button class="del" data-del="'+c.id+'">🗑️</button></div>'; }).join('');
+    });
+    v.innerHTML=html;
+  }
+
+  // ---------- import (photo / pdf) ----------
+  function showOverlay(b){ $('#overlay').style.display=b?'flex':'none'; }
+  function ovProgress(p){ $('#ovBar').style.width=Math.round(p*100)+'%'; }
+  function ovReading(t,m){ $('#ovTitle').textContent=t; $('#ovMsg').textContent=m; $('#ovMsg').style.display='block'; $('#ovWords').style.display='none'; $('#ovHint').style.display='none'; $('#ovCleanRow').style.display='none'; $('#ovBtns').style.display='none'; ovProgress(.03); showOverlay(true); }
+  // English plausibility (for auto clean-up of OCR junk / pinyin / nonsense)
+  let EN_WORDS=null, autoClean=true, lastRaw='';
+  (async()=>{ try{ const r=await fetch('https://cdn.jsdelivr.net/gh/first20hours/google-10000-english/google-10000-english-no-swears.txt'); if(r.ok){ EN_WORDS=new Set((await r.text()).split(/\s+/).map(w=>w.toLowerCase().trim()).filter(Boolean)); const n=purgeBad(); if(n){ save(); if(view==='manage') renderList(); else if(view==='cards') renderCard(); setStatus('Auto-cleaned '+n+' junk card'+(n!==1?'s':'')+' ✓'); setTimeout(()=>setStatus(''),2600); } } }catch(e){} })();
+  const OK_SHORT=new Set(['a','i','an','the','to','of','in','on','at','no','not','we','he','she','it','you','me','my','go','do','is','am','be','by','or','and','us','up','so','as','if','ok','mr','ms','mrs','dr','yes']);
+  function plausible(w){
+    if(w.length<2) return OK_SHORT.has(w);
+    if(!/[aeiouy]/.test(w)) return false;
+    if(/[bcdfghjklmnpqrstvwxz]{4,}/.test(w)) return false;
+    if(/(.)\1\1/.test(w)) return false;
+    const v=(w.match(/[aeiouy]/g)||[]).length/w.length;
+    return v>=0.2 && v<=0.8;
+  }
+  // a word counts as English if: a known short/function word, in the dictionary (or simple stem),
+  // or — to allow uncommon real vocab — a longer pronounceable word. Short non-dictionary tokens
+  // (like pinyin syllables "di", "nu", "zhao") do NOT count.
+  function wordOk(w){
+    if(OK_SHORT.has(w)) return true;
+    if(EN_WORDS){ return EN_WORDS.has(w)||EN_WORDS.has(w.replace(/s$/,''))||EN_WORDS.has(w.replace(/ing$|ed$/,''))||(plausible(w)&&w.length>=6); }
+    return plausible(w)&&w.length>=4;
+  }
+  function looksEnglish(s){
+    const words=(s||'').toLowerCase().split(/[^a-z']+/).filter(Boolean);
+    if(!words.length) return false;
+    let good=0; for(const w of words) if(wordOk(w)) good++;
+    return good>0 && good>=Math.ceil(words.length/2);
+  }
+  function tokenize(t){ return dedupe((t||'').split(/[\n,，;；\t]+/).map(s=>s.replace(/[^A-Za-z' \-/]/g,' ').replace(/\s+/g,' ').trim()).filter(s=>s.length>1&&/[A-Za-z]/.test(s))); }
+  function cleanWords(t){ let w=tokenize(t); if(autoClean) w=w.filter(looksEnglish); return w; }
+
+  // gentle check used to auto-delete existing junk cards (keeps real words, nukes pinyin/OCR garbage)
+  function badEnglish(s){ const words=(s||'').toLowerCase().split(/[^a-z']+/).filter(Boolean); if(!words.length) return true; return !words.some(wordOk); }
+  // returns a problem description for a card, or '' if it's complete and valid
+  function cardIssue(c){
+    const o=c.options&&c.options[0];
+    if(!o||!o.hanzi||!hasZh(o.hanzi)) return 'missing Chinese characters';
+    if(!o.py||!o.py.trim()) return 'missing pinyin';
+    if(!c.en||!c.en.trim()) return 'missing English';
+    if(badEnglish(c.en)) return 'English isn’t a real word';
+    return '';
+  }
+  function purgeBad(){
+    let removed=0;
+    deck=deck.filter(c=>{
+      const o=c.options&&c.options[0];
+      if(o&&o.hanzi&&!o.py){ const p=toPinyin(o.hanzi); if(p) o.py=p; }
+      const keep = !cardIssue(c);
+      if(!keep) removed++;
+      return keep;
+    });
+    return removed;
+  }
+  function ovReview(t,fail){
+    if(t!==undefined) lastRaw=t;
+    const all=tokenize(lastRaw); const c=cleanWords(lastRaw);
+    if(!c.length){ $('#ovTitle').textContent='No clear words found'; $('#ovMsg').textContent=fail||'Nothing readable found.'; $('#ovMsg').style.display='block'; $('#ovWords').style.display='none'; $('#ovHint').style.display='none'; $('#ovCleanRow').style.display=(all.length?'flex':'none'); $('#ovClean').checked=autoClean; $('#ovBtns').style.display='flex'; return; }
+    ovProgress(1);
+    const removed=all.length-c.length;
+    $('#ovTitle').textContent='Found '+c.length+' word'+(c.length>1?'s':'')+(autoClean&&removed>0?(' · '+removed+' unclear removed'):'');
+    $('#ovMsg').style.display='none'; $('#ovWords').value=c.join('\n'); $('#ovWords').style.display='block'; $('#ovHint').style.display='block'; $('#ovCleanRow').style.display='flex'; $('#ovClean').checked=autoClean; $('#ovBtns').style.display='flex';
+  }
+
+  // ---------- Gemini (free vision OCR) ----------
+  const GKEY='cf_gemini_key';
+  let lastTriples=null;
+  function getGemKey(){ try{ return localStorage.getItem(GKEY)||''; }catch(e){ return ''; } }
+  function setGemKey(k){ try{ if(k) localStorage.setItem(GKEY,k); else localStorage.removeItem(GKEY); }catch(e){} }
+  function promptGemKey(){
+    const cur=getGemKey();
+    const k=prompt('Paste your free Gemini API key (from aistudio.google.com/apikey). It is stored only on this device.\n\nLeave empty and press OK to clear the saved key.', cur||'');
+    if(k===null) return cur;
+    const t=(k||'').trim(); setGemKey(t); return t;
+  }
+  function fileToB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]||''); r.onerror=()=>rej(r.error); r.readAsDataURL(file); }); }
+  function canvasToBlob(cv){ return new Promise(res=>cv.toBlob(b=>res(b),'image/jpeg',0.85)); }
+  async function geminiExtract(fileOrBlob){
+    const key=getGemKey(); if(!key) throw new Error('No Gemini key set. Tap 🔑 to add one.');
+    const mime=fileOrBlob.type||'image/jpeg';
+    const b64=await fileToB64(fileOrBlob);
+    const promptText='You are extracting Chinese vocabulary from a textbook page image. Return ONLY a JSON array (no prose, no markdown) of objects with keys "h", "p", "e": '
+      +'\n  "h" = Chinese characters (hanzi), or empty string if no Chinese is shown for that entry.'
+      +'\n  "p" = pinyin with tone marks (e.g. "nǐ hǎo", "sān wèi"). Empty string if not shown.'
+      +'\n  "e" = English meaning (concise, like a dictionary gloss).'
+      +'\nOne object per vocabulary entry. Include numbered entries and clearly-labeled sub-entries. Treat handwritten annotations as additional entries only if they are full vocabulary items (hanzi/pinyin + meaning), otherwise skip them. Do not invent entries.';
+    const body={
+      contents:[{parts:[{text:promptText},{inline_data:{mime_type:mime,data:b64}}]}],
+      generationConfig:{response_mime_type:'application/json',temperature:0}
+    };
+    const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+encodeURIComponent(key);
+    const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!resp.ok){ const t=await resp.text(); throw new Error('Gemini '+resp.status+': '+t.slice(0,200)); }
+    const data=await resp.json();
+    const text=((((data.candidates||[])[0]||{}).content||{}).parts||[]).map(p=>p.text||'').join('').trim();
+    let arr=[]; try{ arr=JSON.parse(text); }catch(e){ const m=text.match(/\[[\s\S]*\]/); if(m){ try{ arr=JSON.parse(m[0]); }catch(e2){} } }
+    if(!Array.isArray(arr)) arr=[];
+    return arr.map(x=>({h:String(x.h||x.hanzi||'').trim(), p:String(x.p||x.py||x.pinyin||'').trim(), e:String(x.e||x.en||x.english||'').trim()})).filter(x=>(x.e||x.h));
+  }
+  function triplesToText(arr){ return arr.map(t=>[(t.e||''),(t.h||''),(t.p||'')].join(' | ')).join('\n'); }
+  function parseTriplesText(s){
+    return (s||'').split(/\r?\n/).map(line=>{
+      const parts=line.split('|').map(x=>x.trim());
+      if(parts.length>=2){ return {e:parts[0]||'', h:parts[1]||'', p:parts[2]||''}; }
+      return {e:line.trim(), h:'', p:''};
+    }).filter(t=>t.e||t.h);
+  }
+  // ---------- offline triples import (no key needed) ----------
+  // Accepts lines like "english | 汉字 | pīnyīn" (any order, | or tab separated),
+  // spreadsheet rows, or plain "汉字 pīnyīn english" lines.
+  const PY_TONED=/[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙǕǗǙǛ]/;
+  const PY_NUM=/\b[a-zü]+[1-5]\b/i;
+  function looksPinyin(s){ return PY_TONED.test(s) || PY_NUM.test(s); }
+  function parseFlexLine(raw){
+    let line=(raw||'').replace(/^\s*\d+\s*[\.\)、:：]?\s*/,'').trim();
+    if(!line) return null;
+    const t={e:'',h:'',p:''};
+    const parts=line.split(/[|\t]/).map(x=>x.trim()).filter(Boolean);
+    if(parts.length>=2){
+      let hIdx=-1;
+      parts.forEach((x,i)=>{ if(hIdx<0&&hasZh(x)) hIdx=i; });
+      if(hIdx<0) return null;
+      t.h=parts[hIdx];
+      const rest=parts.filter((x,i)=>i!==hIdx && !/[㐀-鿿぀-ヿ]/.test(x));
+      const pi=rest.findIndex(x=>looksPinyin(x));
+      if(pi>=0){ t.p=rest[pi]; t.e=rest.filter((x,i)=>i!==pi).join(' '); }
+      else if(rest.length===1){ t.e=rest[0]; }
+      else if(hIdx===0){ t.p=rest[0]; t.e=rest.slice(1).join(' '); }
+      else{ t.e=rest[0]; t.p=rest.slice(1).join(' '); }
+      return t;
+    }
+    if(!hasZh(line)) return null;
+    // Take only the FIRST Chinese run — later runs are usually translations
+    // into Japanese/traditional or OCR bleed from other columns.
+    let hRun=((line.match(/[㐀-鿿][㐀-鿿()（）]*/)||[''])[0]).replace(/[（(]+$/,'');
+    if(((hRun.match(/[)）]/g)||[]).length)>(((hRun.match(/[（(]/g)||[]).length))) hRun=hRun.replace(/[)）]+$/,'');
+    t.h=hRun;
+    const rest=line.replace(/[㐀-鿿぀-ヿ]+/g,' ').replace(/\s+/g,' ').trim();
+    if(rest){
+      const py=[], en=[];
+      rest.split(' ').forEach(w=>{ const c=w.replace(/^[(\[…._~*%"']+/,'').replace(/[)\],.;:!?…_~*%"']+$/,''); if(!c||!/[a-zA-Z]/.test(c)) return; (looksPinyin(c)&&!en.length?py:en).push(c); });
+      t.p=py.join(' ');
+      t.e=en.join(' ').replace(/^[\-–—:,.\/]+|[\-–—:,.\/]+$/g,'').trim();
+    }
+    return t;
+  }
+  function parseFlexTriples(s){
+    if(!hasZh(s||'')) return [];
+    const out=[];
+    (s||'').split(/\r?\n/).forEach(line=>{ const t=parseFlexLine(line); if(t&&t.h&&!/^(生词|单词|単語|词语|课文|生字|练习)$/.test(t.h)) out.push(t); });
+    return out;
+  }
+
+  function ovReviewTriples(arr, failMsg){
+    lastTriples=Array.isArray(arr)?arr:[];
+    if(!lastTriples.length){ $('#ovTitle').textContent='Nothing found'; $('#ovMsg').textContent=failMsg||'No words detected.'; $('#ovMsg').style.display='block'; $('#ovWords').style.display='none'; $('#ovHint').style.display='none'; $('#ovCleanRow').style.display='none'; $('#ovBtns').style.display='flex'; return; }
+    ovProgress(1);
+    $('#ovTitle').textContent='Found '+lastTriples.length+' word'+(lastTriples.length>1?'s':'');
+    $('#ovMsg').style.display='none';
+    $('#ovWords').value=triplesToText(lastTriples); $('#ovWords').style.display='block';
+    $('#ovHint').textContent='One per line: english | chinese | pinyin. Edit anything, then create cards.'; $('#ovHint').style.display='block';
+    $('#ovCleanRow').style.display='none';
+    $('#ovBtns').style.display='flex';
+  }
+
+  $('#keyBtn').addEventListener('click',()=>{ const k=promptGemKey(); setStatus(k?'Gemini key saved ✓':'Gemini key cleared'); setTimeout(()=>setStatus(''),2000); });
+
+  // ---------- built-in OCR (persistent worker, Chinese+English, photo preprocessing) ----------
+  let _ocrWorker=null,_ocrInit=null,_ocrLog=null;
+  async function getOcrWorker(){
+    if(_ocrWorker) return _ocrWorker;
+    if(!_ocrInit){
+      _ocrInit=(async()=>{
+        const w=await Tesseract.createWorker(['chi_sim','eng'],1,{logger:m=>{ if(_ocrLog) _ocrLog(m); }});
+        await w.setParameters({preserve_interword_spaces:'1'});
+        _ocrWorker=w; return w;
+      })().catch(e=>{ _ocrInit=null; throw e; });
+    }
+    return _ocrInit;
+  }
+  async function preprocForOcr(src){
+    try{
+      const img=(typeof HTMLCanvasElement!=='undefined'&&src instanceof HTMLCanvasElement)?src:await createImageBitmap(src);
+      const scale=Math.min(3,Math.max(1,1800/(img.width||1)));
+      const cv=document.createElement('canvas'); cv.width=Math.round(img.width*scale); cv.height=Math.round(img.height*scale);
+      const ctx=cv.getContext('2d',{willReadFrequently:true}); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+      ctx.drawImage(img,0,0,cv.width,cv.height);
+      const d=ctx.getImageData(0,0,cv.width,cv.height), px=d.data, n=px.length/4;
+      // Pick the color channel with the most contrast — colored ink on colored
+      // paper (e.g. red text on pink pages) is often invisible in grayscale.
+      const sum=[0,0,0], sq=[0,0,0];
+      for(let i=0;i<px.length;i+=4){ for(let c=0;c<3;c++){ const v=px[i+c]; sum[c]+=v; sq[c]+=v*v; } }
+      let ch=0,bestVar=-1;
+      for(let c=0;c<3;c++){ const m=sum[c]/n, va=sq[c]/n-m*m; if(va>bestVar){bestVar=va; ch=c;} }
+      // Otsu threshold on that channel → clean black & white for the OCR
+      const hist=new Array(256).fill(0);
+      for(let i=0;i<px.length;i+=4) hist[px[i+ch]|0]++;
+      let sumAll=0; for(let t=0;t<256;t++) sumAll+=t*hist[t];
+      let wB=0,sumB=0,maxVar=-1,thr=127;
+      for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=n-wB; if(!wF) break; sumB+=t*hist[t]; const mB=sumB/wB, mF=(sumAll-sumB)/wF, v=wB*wF*(mB-mF)*(mB-mF); if(v>maxVar){maxVar=v; thr=t;} }
+      let dark=0;
+      for(let i=0;i<px.length;i+=4){ const v=px[i+ch]<=thr?0:255; if(!v)dark++; px[i]=px[i+1]=px[i+2]=v; }
+      const frac=dark/n;
+      if(frac>0.004&&frac<0.6){ ctx.putImageData(d,0,0); return cv; }
+      // degenerate threshold (washed-out or mostly-dark photo) — fall back to contrast stretch
+      const d2=ctx.getImageData(0,0,cv.width,cv.height), q=d2.data;
+      let min=255,max=0;
+      for(let i=0;i<q.length;i+=4){ const g=q[i+ch]; if(g<min)min=g; if(g>max)max=g; }
+      const range=Math.max(1,max-min);
+      for(let i=0;i<q.length;i+=4){ const v=(q[i+ch]-min)*255/range; q[i]=q[i+1]=q[i+2]=v; }
+      ctx.putImageData(d2,0,0);
+      return cv;
+    }catch(e){ return src; }
+  }
+  async function ocrImage(src,onProgress){
+    _ocrLog=m=>{ if(!onProgress) return;
+      const st=String(m.status||'');
+      if(st==='recognizing text') onProgress(.35+.6*(m.progress||0),'Reading text…');
+      else if(st.indexOf('load')>=0||st.indexOf('initializ')>=0) onProgress(.05+.25*(m.progress||0),'Loading Chinese reader (one-time download)…');
+    };
+    try{
+      const w=await getOcrWorker();
+      const cv=await preprocForOcr(src);
+      if(onProgress) onProgress(.35,'Reading text…');
+      const {data}=await w.recognize(cv);
+      return (data&&data.text)||'';
+    } finally{ _ocrLog=null; }
+  }
+
+  $('#photoBtn').addEventListener('click',()=>{
+    if(!getGemKey() && (window.__ocrFailed||typeof Tesseract==='undefined')){ setStatus('Add a 🔑 Gemini key, or check your internet.',true); return; }
+    $('#photoInput').value=''; $('#photoInput').click();
+  });
+  $('#photoInput').addEventListener('change',async e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    lastTriples=null;
+    ovReading('Reading photo…','Extracting words…');
+    if(getGemKey()){
+      try{ ovProgress(.4); const tr=await geminiExtract(f); ovReviewTriples(tr,'Try a clearer photo, or check your key.'); return; }
+      catch(err){ ovReading('Reading photo…','Gemini unavailable ('+(err.message||err).slice(0,60)+'…) — using built-in reader…'); }
+    }
+    if(window.__ocrFailed||typeof Tesseract==='undefined'){ ovReview('','Could not read the photo (no reader available — check your internet).'); return; }
+    try{ const txt=await ocrImage(f,(p,msg)=>{ ovProgress(p); if(msg) $('#ovMsg').textContent=msg; }); const ft=parseFlexTriples(txt); if(ft.length) ovReviewTriples(ft,'Try a clearer photo.'); else ovReview(txt,'Try a clearer, well-lit picture.'); }
+    catch(err){ ovReview('','Could not read the photo. ('+err.message+')'); }
+  });
+
+  async function readPdfBytes(buf){
+    if(window.__pdfFailed||typeof pdfjsLib==='undefined') throw new Error('PDF reader needs internet.');
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise; let all='';
+    for(let p=1;p<=pdf.numPages;p++){
+      $('#ovMsg').textContent='Reading page '+p+' of '+pdf.numPages+'…'; ovProgress(.05+.9*((p-1)/pdf.numPages));
+      const page=await pdf.getPage(p); const tc=await page.getTextContent();
+      const txt=tc.items.map(i=>i.str).join(' ').trim();
+      if(txt.replace(/\s/g,'').length>4){ all+='\n'+tc.items.map(i=>i.str+(i.hasEOL?'\n':' ')).join(''); }
+      else if(getGemKey()){
+        $('#ovMsg').textContent='Scanning page '+p+' (Gemini)…';
+        const vp=page.getViewport({scale:2}); const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+        await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+        const blob=await canvasToBlob(cv);
+        try{ const tr=await geminiExtract(blob); (lastTriples=lastTriples||[]).push(...tr); }
+        catch(e){ if(typeof Tesseract!=='undefined'&&!window.__ocrFailed){ $('#ovMsg').textContent='Scanning page '+p+' (built-in)…'; all+='\n'+await ocrImage(cv); } else throw e; }
+      }
+      else if(typeof Tesseract!=='undefined'&&!window.__ocrFailed){
+        $('#ovMsg').textContent='Scanning page '+p+' (image)…';
+        const vp=page.getViewport({scale:2}); const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+        await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+        all+='\n'+await ocrImage(cv);
+      }
+    }
+    return all;
+  }
+  async function readDocx(f){ if(window.__docxFailed||typeof mammoth==='undefined') throw new Error('Word reader needs internet.'); const r=await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()}); return r.value||''; }
+  async function readSheet(f){
+    if(window.__xlsxFailed||typeof XLSX==='undefined') throw new Error('Spreadsheet reader needs internet.');
+    const wb=XLSX.read(await f.arrayBuffer(),{type:'array'}); let lines=[];
+    wb.SheetNames.forEach(n=>{ XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,blankrows:false}).forEach(row=>{ const cells=(row||[]).map(c=>c==null?'':String(c).trim()).filter(Boolean); if(cells.length) lines.push(cells.join(' | ')); }); });
+    return lines.join('\n');
+  }
+  async function readNumbers(f){
+    const msg='Numbers files can’t be read directly. In Numbers, choose File → Export To → CSV (or Excel), then import that file.';
+    if(window.__zipFailed||typeof JSZip==='undefined') throw new Error(msg);
+    const zip=await JSZip.loadAsync(await f.arrayBuffer()); let pdfEntry=null;
+    zip.forEach((p,entry)=>{ if(/preview[^/]*\.pdf$/i.test(p)||/\.pdf$/i.test(p)) pdfEntry=entry; });
+    if(!pdfEntry) throw new Error(msg);
+    return await readPdfBytes(await pdfEntry.async('arraybuffer'));
+  }
+  $('#pdfBtn').addEventListener('click',()=>{ $('#pdfInput').value=''; $('#pdfInput').click(); });
+  $('#pdfInput').addEventListener('change',async e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    const ext=((f.name||'').toLowerCase().split('.').pop())||'';
+    lastTriples=null;
+    ovReading('Reading file…','Opening '+(f.name||'document')+'…');
+    try{
+      let text='';
+      if(f.type&&f.type.indexOf('image/')===0 && getGemKey()){
+        try{ const tr=await geminiExtract(f); ovReviewTriples(tr,'Could not read this image.'); return; }
+        catch(err){ /* Gemini failed (quota/network) — fall through to built-in reader */ }
+      }
+      if(ext==='pdf') text=await readPdfBytes(await f.arrayBuffer());
+      else if(ext==='docx') text=await readDocx(f);
+      else if(ext==='xlsx'||ext==='xls'||ext==='csv'||ext==='tsv') text=await readSheet(f);
+      else if(ext==='numbers') text=await readNumbers(f);
+      else if(ext==='txt') text=await f.text();
+      else if(f.type&&f.type.indexOf('image/')===0&&typeof Tesseract!=='undefined'){ text=await ocrImage(f,(p,msg)=>{ ovProgress(p); if(msg) $('#ovMsg').textContent=msg; }); }
+      else text=await f.text();
+      if(lastTriples&&lastTriples.length) ovReviewTriples(lastTriples,'No words detected.');
+      else{ const ft=parseFlexTriples(text); if(ft.length) ovReviewTriples(ft,'No words detected.'); else ovReview(text,'No readable words found in this file.'); }
+    }catch(err){ ovReview('', err.message||'Could not read this file.'); }
+  });
+
+  $('#ovCancel').addEventListener('click',()=>showOverlay(false));
+  $('#ovGo').addEventListener('click',async()=>{
+    // Direct import: any lines containing Chinese (from Gemini, a file, or pasted) — no translate roundtrip.
+    const flexT=parseFlexTriples($('#ovWords').value);
+    if(flexT.length || (lastTriples&&lastTriples.length)){
+      const triples=flexT.length?flexT:parseTriplesText($('#ovWords').value);
+      if(!triples.length){ showOverlay(false); lastTriples=null; return; }
+      $('#ovBtns').style.display='none'; $('#ovWords').style.display='none'; $('#ovHint').style.display='none'; $('#ovMsg').style.display='block'; $('#ovTitle').textContent='Creating cards…';
+      let added=0;
+      for(let i=0;i<triples.length;i++){
+        ovProgress(i/triples.length);
+        const t=triples[i];
+        const h=t.h||''; const p=(t.p&&looksPinyin(t.p))?t.p:((h?toPinyin(h):'')||t.p); const en=t.e||'';
+        if(!en && !h) continue;
+        deck.push({id:'g'+Date.now()+'_'+i, en:en||h, options:[{hanzi:h, py:p}], lesson:'My Words', topic:'Other', pic:false, known:false, seed:Math.floor(Math.random()*99999)});
+        added++;
+      }
+      ovProgress(1); save(); showOverlay(false); lastTriples=null; setStatus('Added '+added+' card'+(added!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2200);
+      return;
+    }
+    const words=dedupe($('#ovWords').value.split(/[\n,，;；\t]+/).map(s=>s.trim()).filter(Boolean)); if(!words.length){ showOverlay(false); return; }
+    $('#ovBtns').style.display='none'; $('#ovWords').style.display='none'; $('#ovHint').style.display='none'; $('#ovMsg').style.display='block'; $('#ovTitle').textContent='Creating cards…';
+    let added=0;
+    for(let i=0;i<words.length;i++){ ovProgress(i/words.length); $('#ovMsg').textContent='Translating “'+words[i]+'” ('+(i+1)+'/'+words.length+')…'; try{ const o=await translate(words[i]); if(o.length){ deck.push({id:'u'+Date.now()+'_'+i, en:words[i], options:o, lesson:'My Words', topic:'Other', pic:true, known:false, seed:Math.floor(Math.random()*99999)}); added++; } }catch(e){} }
+    ovProgress(1); purgeBad(); save(); showOverlay(false); setStatus('Added '+added+' card'+(added!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2200);
+  });
+
+  // ---------- global events ----------
+  document.querySelector('#modenav').addEventListener('click',e=>{ const b=e.target.closest('[data-mode]'); if(b) setMode(b.getAttribute('data-mode')); });
+
+  document.body.addEventListener('click',e=>{
+    const say=e.target.closest('[data-say]'); if(say){ e.stopPropagation(); speak(decodeURIComponent(say.getAttribute('data-say'))); return; }
+    const dirb=e.target.closest('[data-dir]'); if(dirb){ dir=dirb.getAttribute('data-dir'); flipped=false; renderCardsTools(); renderCard(); return; }
+    const nav=e.target.closest('[data-nav]'); if(nav){ const v=nav.getAttribute('data-nav'); if(v==='flip'){ flipCard(); } else move(parseInt(v,10)); return; }
+    const judge=e.target.closest('[data-judge]'); if(judge){ const c=visibleCards()[idx]; if(c){ const isKnown=judge.getAttribute('data-judge')==='1'; c.known=isKnown; if(isKnown) c.knownPhase=round%3; else delete c.knownPhase; save(); if(unknownOnly&&c.known) renderCard(); else move(1);} return; }
+    const gnav=e.target.closest('[data-gnav]'); if(gnav){ const list=grammarList(); gIdx=(gIdx+parseInt(gnav.getAttribute('data-gnav'),10)+list.length)%list.length; renderGrammar(); return; }
+    const mid=e.target.closest('[data-mid]'); if(mid){ answerMatch(mid.getAttribute('data-mid')); return; }
+    if(e.target.closest('[data-mskip]')){ newMatch(); return; }
+    if(e.target.id==='matchNext'){ newMatch(); return; }
+    const fans=e.target.closest('[data-fans]'); if(fans){ answerFill(decodeURIComponent(fans.getAttribute('data-fans'))); return; }
+    if(e.target.closest('[data-fskip]')){ newFill(); return; }
+    if(e.target.id==='fillNext'){ newFill(); return; }
+    const pk=e.target.closest('[data-pack]'); if(pk){ const name=decodeURIComponent(pk.getAttribute('data-pack')); const n=addPack(name); renderPacks(); setStatus(n?('Added '+n+' '+name+' card'+(n!==1?'s':'')+' ✓'):(name+' already added ✓')); setTimeout(()=>setStatus(''),2200); return; }
+    if(e.target.id==='probToggle'){ showProblemsOnly=!showProblemsOnly; showFlaggedOnly=false; renderList(); return; }
+    if(e.target.id==='flagToggle'){ showFlaggedOnly=!showFlaggedOnly; if(showFlaggedOnly) showProblemsOnly=false; renderList(); return; }
+    const fl=e.target.closest('[data-flag]'); if(fl){ const c=deck.find(x=>x.id===fl.getAttribute('data-flag')); if(c){ const wasFlagged=c.flagged; c.flagged=!c.flagged; save(); if(mode==='manage') renderList(); else { fl.classList.toggle('on',c.flagged); fl.textContent=c.flagged?'🚩 Flagged as incorrect':'🚩 Flag as incorrect'; } if(c.flagged && !wasFlagged) verifyAndFix(c); } return; }
+    const ed=e.target.closest('[data-edit]'); if(ed){ openEdit(ed.getAttribute('data-edit')); return; }
+    const del=e.target.closest('[data-del]'); if(del){ deck=deck.filter(c=>c.id!==del.getAttribute('data-del')); save(); renderList(); return; }
+    const card=e.target.closest('#card'); if(card){ flipCard(); }
+  });
+
+  document.body.addEventListener('change',e=>{
+    if(e.target.id==='lessonF'){ lessonF=e.target.value; idx=0; flipped=false; renderCard(); }
+    if(e.target.id==='topicF'){ topicF=e.target.value; idx=0; flipped=false; renderCard(); }
+    if(e.target.id==='glessonF'){ lessonF=e.target.value; gIdx=0; renderGrammar(); }
+    if(e.target.id==='ovClean'){ autoClean=e.target.checked; ovReview(); }
+  });
+  $('#cleanBtn').addEventListener('click',()=>{ const n=purgeBad(); save(); renderList(); setStatus(n?('Removed '+n+' incomplete card'+(n!==1?'s':'')+' ✓'):'All cards look complete ✓'); setTimeout(()=>setStatus(''),2600); });
+
+  // verify each card's English actually matches its Chinese (online), fixing or deleting mismatches
+  function norm(s){ return (s||'').toLowerCase().replace(/[^a-z一-鿿]/g,''); }
+  async function fixMismatches(){
+    if(!deck.length) return;
+    $('#fixBtn').disabled=true; $('#cleanBtn').disabled=true;
+    const arr=deck.filter(c=>c.lesson==='My Words');
+    if(!arr.length){ $('#fixBtn').disabled=false; $('#cleanBtn').disabled=false; setStatus('No imported cards to check — built-in lessons & packs are already verified ✓'); setTimeout(()=>setStatus(''),3800); return; }
+    ovReading('Checking cards…','Verifying English ↔ Chinese…'); $('#ovBtns').style.display='none';
+    let deleted=0, fixed=0, ok=0, errs=0;
+    for(let i=0;i<arr.length;i++){
+      const c=arr[i]; ovProgress(i/arr.length); $('#ovMsg').textContent='Checking '+(i+1)+' / '+arr.length+': '+(c.en||'')+'…';
+      if(!c.en || badEnglish(c.en)){ deck=deck.filter(x=>x.id!==c.id); deleted++; continue; }
+      let opts=[]; try{ opts=await translate(c.en); }catch(e){ errs++; continue; }
+      if(!opts.length){ ok++; continue; }                       // couldn't verify — leave as-is
+      const cur=c.options&&c.options[0]&&c.options[0].hanzi;
+      if(cur && opts.some(o=>o.hanzi===cur)){ ok++; }            // current characters are a valid translation
+      else { c.options=[{hanzi:opts[0].hanzi, py:opts[0].py||toPinyin(opts[0].hanzi)}]; fixed++; }
+    }
+    ovProgress(1); save(); showOverlay(false);
+    $('#fixBtn').disabled=false; $('#cleanBtn').disabled=false; renderList();
+    setStatus('Checked '+arr.length+': '+fixed+' fixed · '+deleted+' deleted · '+ok+' already correct'+(errs?(' · '+errs+' couldn’t check'):'')+' ✓');
+    setTimeout(()=>setStatus(''),4500);
+  }
+  $('#fixBtn').addEventListener('click',fixMismatches);
+
+  // when a card is flagged, automatically verify it online and fix/confirm/delete
+  function refreshCurrent(){ if(mode==='cards') renderCard(); else if(mode==='manage') renderList(); }
+  async function verifyAndFix(c){
+    setStatus('🔧 Verifying “'+(c.en||'')+'”…');
+    if(!c.en || badEnglish(c.en)){ deck=deck.filter(x=>x.id!==c.id); save(); refreshCurrent(); setStatus('Removed card (no real English word) ✓'); setTimeout(()=>setStatus(''),3000); return; }
+    let opts;
+    try{ opts=await translate(c.en); }catch(e){ setStatus('Could not verify (offline?) — card stays flagged.',true); setTimeout(()=>setStatus(''),3200); return; }
+    if(!opts.length){ setStatus('No translation found — card stays flagged.',true); setTimeout(()=>setStatus(''),3200); return; }
+    const cur=c.options&&c.options[0]&&c.options[0].hanzi;
+    if(cur && opts.some(o=>o.hanzi===cur)){
+      c.flagged=false; save(); refreshCurrent();
+      setStatus('Verified ✓ — “'+c.en+' = '+cur+'” looks correct, flag removed');
+    } else {
+      c.options=[{hanzi:opts[0].hanzi, py:opts[0].py||toPinyin(opts[0].hanzi)}];
+      c.flagged=false; delete c.ex; delete c.exTried;
+      save(); refreshCurrent();
+      setStatus('Fixed ✓ — “'+c.en+'” → '+opts[0].hanzi);
+    }
+    setTimeout(()=>setStatus(''),3800);
+  }
+
+  // ---------- edit a card ----------
+  let editId=null;
+  function openEdit(id){
+    const c=deck.find(x=>x.id===id); if(!c) return; editId=id;
+    const o=(c.options&&c.options[0])||{hanzi:'',py:''};
+    $('#edEn').value=c.en||''; $('#edHz').value=o.hanzi||''; $('#edPy').value=o.py||'';
+    $('#edLesson').value=c.lesson||''; $('#edTopic').value=c.topic||'';
+    $('#editOverlay').style.display='flex';
+  }
+  $('#edAuto').addEventListener('click',()=>{ $('#edPy').value=toPinyin($('#edHz').value.trim()); });
+  $('#edCancel').addEventListener('click',()=>{ $('#editOverlay').style.display='none'; editId=null; });
+  $('#edSave').addEventListener('click',()=>{
+    const c=deck.find(x=>x.id===editId);
+    if(c){
+      const en=$('#edEn').value.trim(), hz=$('#edHz').value.trim(); let py=$('#edPy').value.trim();
+      if(en) c.en=en;
+      if(hz){ if(!py) py=toPinyin(hz); if(!c.options||!c.options.length) c.options=[{hanzi:hz,py:py}]; else c.options[0]={hanzi:hz,py:py}; }
+      c.lesson=$('#edLesson').value.trim()||'My Words';
+      c.topic=$('#edTopic').value.trim()||'Other';
+      save();
+    }
+    $('#editOverlay').style.display='none'; editId=null; renderList(); setStatus('Saved ✓'); setTimeout(()=>setStatus(''),1200);
+  });
+  document.body.addEventListener('click',e=>{ if(e.target.id==='unkT'){ unknownOnly=!unknownOnly; idx=0; flipped=false; renderCardsTools(); renderCard(); } });
+
+  $('#addBtn').addEventListener('click',addWord);
+  $('#word').addEventListener('keydown',e=>{ if(e.key==='Enter') addWord(); });
+
+  // swipe on cards
+  let sx=0,sy=0;
+  $('#cardsStage').addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+  $('#cardsStage').addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy; if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)) move(dx<0?1:-1); },{passive:true});
+
+  // keyboard: ← prev, → next, ↑/↓ flip (Flashcards mode only, ignored while typing)
+  document.addEventListener('keydown',e=>{
+    if(mode!=='cards') return;
+    const t=e.target; if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName||'')) return;
+    if(e.key==='ArrowLeft'){ move(-1); e.preventDefault(); }
+    else if(e.key==='ArrowRight'){ move(1); e.preventDefault(); }
+    else if(e.key==='ArrowUp'||e.key==='ArrowDown'){ flipCard(); e.preventDefault(); }
+  });
+
+  if('speechSynthesis' in window){ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>speechSynthesis.getVoices(); }
+  const _purged=purgeBad(); if(_purged) save();
+  resumeCardId=loadState();
+  setMode(mode);
+  if(_purged){ setStatus('Auto-cleaned '+_purged+' incomplete card'+(_purged!==1?'s':'')+' ✓'); setTimeout(()=>setStatus(''),2800); }
+})();
+</script>
+</body>
+</html>
