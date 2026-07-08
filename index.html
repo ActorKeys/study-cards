@@ -457,12 +457,25 @@
 
   // remember where the user left off (mode, direction, filters, current card)
   const SKEY='zh_hsk_state';
-  function saveState(){ try{ const cards=visibleCards(); const cur=cards[idx]; localStorage.setItem(SKEY, JSON.stringify({mode:mode,dir:dir,lessonF:lessonF,topicF:topicF,unknownOnly:unknownOnly,gIdx:gIdx,round:round,cardId:cur?cur.id:null})); }catch(e){} }
-  function loadState(){ try{ const s=JSON.parse(localStorage.getItem(SKEY)); if(s&&typeof s==='object'){ if(s.mode) mode=s.mode; if(s.dir) dir=s.dir; if(s.lessonF) lessonF=s.lessonF; if(s.topicF) topicF=s.topicF; unknownOnly=!!s.unknownOnly; if(typeof s.gIdx==='number') gIdx=s.gIdx; if(typeof s.round==='number') round=s.round; return s.cardId||null; } }catch(e){} return null; }
+  function saveState(){ try{ const cards=visibleCards(); const cur=cards[idx]; localStorage.setItem(SKEY, JSON.stringify({mode:mode,dir:dir,lessonF:lessonF,topicF:topicF,addedF:addedF,unknownOnly:unknownOnly,gIdx:gIdx,round:round,cardId:cur?cur.id:null})); }catch(e){} }
+  function loadState(){ try{ const s=JSON.parse(localStorage.getItem(SKEY)); if(s&&typeof s==='object'){ if(s.mode) mode=s.mode; if(s.dir) dir=s.dir; if(s.lessonF) lessonF=s.lessonF; if(s.topicF) topicF=s.topicF; if(s.addedF) addedF=s.addedF; unknownOnly=!!s.unknownOnly; if(typeof s.gIdx==='number') gIdx=s.gIdx; if(typeof s.round==='number') round=s.round; return s.cardId||null; } }catch(e){} return null; }
 
   // ---------- state ----------
   let mode='cards';
-  let idx=0, flipped=false, dir='en2zh', unknownOnly=false, lessonF='All', topicF='All';
+  let idx=0, flipped=false, dir='en2zh', unknownOnly=false, lessonF='All', topicF='All', addedF='All';
+
+  // ---------- entry-time grouping ----------
+  function entryStamp(c){ if(c.added) return c.added; const m=/^[uvgp](\d{12,14})/.exec(c.id||''); return m?+m[1]:null; }
+  function entryDayKey(c){ const t=entryStamp(c); if(!t) return ''; const d=new Date(t); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function dayLabel(k){
+    if(!k) return 'Built-in';
+    const p=k.split('-'); const d=new Date(+p[0],+p[1]-1,+p[2]); const now=new Date();
+    const t0=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const diff=Math.round((t0-d)/86400000);
+    if(diff===0) return 'Added today'; if(diff===1) return 'Added yesterday';
+    return 'Added '+d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+(d.getFullYear()!==now.getFullYear()?' '+d.getFullYear():'');
+  }
+  function entryDays(){ return Array.from(new Set(deck.map(entryDayKey).filter(Boolean))).sort().reverse(); }
   let gIdx=0, showProblemsOnly=false, showFlaggedOnly=false, resumeCardId=null, round=0;
 
   function setStatus(m,err){ const s=$('#status'); s.textContent=m||''; s.className='status'+(err?' err':''); }
@@ -498,7 +511,7 @@
   function addPack(name){
     const items=TOPIC_PACKS[name]||[]; let added=0;
     const have=new Set(deck.map(c=>(c.options&&c.options[0]&&c.options[0].hanzi)||''));
-    items.forEach((it,i)=>{ const h=it[1]; if(have.has(h)) return; deck.push({id:'p'+Date.now()+'_'+i+'_'+name.length, en:it[0], options:[{hanzi:h,py:it[2]}], lesson:name, topic:name, known:false, seed:(i*53+17)%99999, pic:false}); have.add(h); added++; });
+    items.forEach((it,i)=>{ const h=it[1]; if(have.has(h)) return; deck.push({id:'p'+Date.now()+'_'+i+'_'+name.length, en:it[0], options:[{hanzi:h,py:it[2]}], lesson:name, topic:name, known:false, added:Date.now(), seed:(i*53+17)%99999, pic:false}); have.add(h); added++; });
     if(added) save();
     return added;
   }
@@ -510,6 +523,7 @@
     let cs=deck.slice();
     if(lessonF!=='All') cs=cs.filter(c=>c.lesson===lessonF);
     if(topicF!=='All') cs=cs.filter(c=>c.topic===topicF);
+    if(addedF!=='All') cs=cs.filter(c=>{ const k=entryDayKey(c); return addedF==='builtin' ? !k : k===addedF; });
     if(unknownOnly) cs=cs.filter(c=>!c.known);
     else cs=cs.filter(c=>!c.known || ((round%3)===((c.knownPhase||0)%3))); // known cards only every 3rd round
     return cs;
@@ -524,6 +538,7 @@
       '</div>'+
       '<select class="flt" id="lessonF"><option>All</option>'+lz.map(l=>'<option'+(l===lessonF?' selected':'')+'>'+esc(l)+'</option>').join('')+'</select>'+
       '<select class="flt" id="topicF"><option>All</option>'+tp.map(t=>'<option'+(t===topicF?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select>'+
+      '<select class="flt" id="addedF"><option value="All">Any time</option>'+entryDays().map(k=>'<option value="'+k+'"'+(k===addedF?' selected':'')+'>'+dayLabel(k)+'</option>').join('')+(deck.some(c=>!entryDayKey(c))?'<option value="builtin"'+(addedF==='builtin'?' selected':'')+'>Built-in</option>':'')+'</select>'+
       '<button class="toggle'+(unknownOnly?' on':'')+'" id="unkT">'+(unknownOnly?'To-learn':'All cards')+'</button>';
   }
   function renderCard(){
@@ -717,7 +732,7 @@
     if(hasZh(raw)){
       const triples=raw.split(/[,，;；\n]+/).map(s=>parseFlexLine(s)).filter(t=>t&&t.h);
       let n=0;
-      triples.forEach((t,i)=>{ deck.push({id:'u'+Date.now()+'_'+i, en:t.e||t.h, options:[{hanzi:t.h, py:(t.p&&looksPinyin(t.p))?t.p:(toPinyin(t.h)||t.p)}], lesson:'My Words', topic:'Other', pic:false, known:false, seed:Math.floor(Math.random()*99999)}); n++; });
+      triples.forEach((t,i)=>{ deck.push({id:'u'+Date.now()+'_'+i, en:t.e||t.h, options:[{hanzi:t.h, py:(t.p&&looksPinyin(t.p))?t.p:(toPinyin(t.h)||t.p)}], lesson:'My Words', topic:'Other', pic:false, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)}); n++; });
       if(n){ save(); inp.value=''; setStatus('Added '+n+' card'+(n!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2000); return; }
     }
     const words=splitWords(raw); $('#addBtn').disabled=true; let added=0;
@@ -725,7 +740,7 @@
       for(let i=0;i<words.length;i++){
         setStatus(words.length>1?('Translating '+(i+1)+'/'+words.length+': “'+words[i]+'”…'):('Translating “'+words[i]+'”…'));
         const options=await translate(words[i]);
-        if(options.length){ deck.push({id:'u'+Date.now()+'_'+i, en:words[i], options, lesson:'My Words', topic:'Other', pic:true, known:false, seed:Math.floor(Math.random()*99999)}); added++; }
+        if(options.length){ deck.push({id:'u'+Date.now()+'_'+i, en:words[i], options, lesson:'My Words', topic:'Other', pic:true, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)}); added++; }
       }
       save(); inp.value='';
       setStatus(added?('Added '+added+' card'+(added!==1?'s':'')+' ✓'):'No translations found — check your connection.', !added);
@@ -751,7 +766,7 @@
     try{
       const options=await translate(word);
       if(!options.length){ setStatus('No translation found for “'+word+'” — check connection.',true); return; }
-      const card={id:'v'+Date.now(), en:word, options:options, lesson:'My Words', topic:'Spoken', pic:true, known:false, seed:Math.floor(Math.random()*99999)};
+      const card={id:'v'+Date.now(), en:word, options:options, lesson:'My Words', topic:'Spoken', pic:true, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)};
       deck.push(card); save(); $('#word').value=''; if(mode==='manage') renderList();
       speak(options[0].hanzi);
       setStatus('Added '+options[0].hanzi+' ✓ — finding example sentence…');
@@ -1136,7 +1151,7 @@
         const t=triples[i];
         const h=t.h||''; const p=(t.p&&looksPinyin(t.p))?t.p:((h?toPinyin(h):'')||t.p); const en=t.e||'';
         if(!en && !h) continue;
-        deck.push({id:'g'+Date.now()+'_'+i, en:en||h, options:[{hanzi:h, py:p}], lesson:'My Words', topic:'Other', pic:false, known:false, seed:Math.floor(Math.random()*99999)});
+        deck.push({id:'g'+Date.now()+'_'+i, en:en||h, options:[{hanzi:h, py:p}], lesson:'My Words', topic:'Other', pic:false, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)});
         added++;
       }
       ovProgress(1); save(); showOverlay(false); lastTriples=null; setStatus('Added '+added+' card'+(added!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2200);
@@ -1145,7 +1160,7 @@
     const words=dedupe($('#ovWords').value.split(/[\n,，;；\t]+/).map(s=>s.trim()).filter(Boolean)); if(!words.length){ showOverlay(false); return; }
     $('#ovBtns').style.display='none'; $('#ovWords').style.display='none'; $('#ovHint').style.display='none'; $('#ovMsg').style.display='block'; $('#ovTitle').textContent='Creating cards…';
     let added=0;
-    for(let i=0;i<words.length;i++){ ovProgress(i/words.length); $('#ovMsg').textContent='Translating “'+words[i]+'” ('+(i+1)+'/'+words.length+')…'; try{ const o=await translate(words[i]); if(o.length){ deck.push({id:'u'+Date.now()+'_'+i, en:words[i], options:o, lesson:'My Words', topic:'Other', pic:true, known:false, seed:Math.floor(Math.random()*99999)}); added++; } }catch(e){} }
+    for(let i=0;i<words.length;i++){ ovProgress(i/words.length); $('#ovMsg').textContent='Translating “'+words[i]+'” ('+(i+1)+'/'+words.length+')…'; try{ const o=await translate(words[i]); if(o.length){ deck.push({id:'u'+Date.now()+'_'+i, en:words[i], options:o, lesson:'My Words', topic:'Other', pic:true, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)}); added++; } }catch(e){} }
     ovProgress(1); purgeBad(); save(); showOverlay(false); setStatus('Added '+added+' card'+(added!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2200);
   });
 
@@ -1176,6 +1191,7 @@
   document.body.addEventListener('change',e=>{
     if(e.target.id==='lessonF'){ lessonF=e.target.value; idx=0; flipped=false; renderCard(); }
     if(e.target.id==='topicF'){ topicF=e.target.value; idx=0; flipped=false; renderCard(); }
+    if(e.target.id==='addedF'){ addedF=e.target.value; idx=0; flipped=false; renderCard(); }
     if(e.target.id==='glessonF'){ lessonF=e.target.value; gIdx=0; renderGrammar(); }
     if(e.target.id==='ovClean'){ autoClean=e.target.checked; ovReview(); }
   });
