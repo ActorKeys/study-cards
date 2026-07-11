@@ -457,8 +457,8 @@
 
   // remember where the user left off (mode, direction, filters, current card)
   const SKEY='zh_hsk_state';
-  function saveState(){ try{ const cards=visibleCards(); const cur=cards[idx]; localStorage.setItem(SKEY, JSON.stringify({mode:mode,dir:dir,lessonF:lessonF,topicF:topicF,addedF:addedF,unknownOnly:unknownOnly,gIdx:gIdx,round:round,cardId:cur?cur.id:null})); }catch(e){} }
-  function loadState(){ try{ const s=JSON.parse(localStorage.getItem(SKEY)); if(s&&typeof s==='object'){ if(s.mode) mode=s.mode; if(s.dir) dir=s.dir; if(s.lessonF) lessonF=s.lessonF; if(s.topicF) topicF=s.topicF; if(s.addedF) addedF=s.addedF; unknownOnly=!!s.unknownOnly; if(typeof s.gIdx==='number') gIdx=s.gIdx; if(typeof s.round==='number') round=s.round; return s.cardId||null; } }catch(e){} return null; }
+  function saveState(){ try{ const cards=visibleCards(); const cur=cards[idx]; localStorage.setItem(SKEY, JSON.stringify({mode:mode,dir:dir,lessonF:lessonF,topicF:topicF,addedF:addedF,unknownOnly:unknownOnly,gIdx:gIdx,round:round,idx:idx,cardId:cur?cur.id:null})); }catch(e){} }
+  function loadState(){ try{ const s=JSON.parse(localStorage.getItem(SKEY)); if(s&&typeof s==='object'){ if(s.mode) mode=s.mode; if(s.dir) dir=s.dir; if(s.lessonF) lessonF=s.lessonF; if(s.topicF) topicF=s.topicF; if(s.addedF) addedF=s.addedF; unknownOnly=!!s.unknownOnly; if(typeof s.gIdx==='number') gIdx=s.gIdx; if(typeof s.round==='number') round=s.round; if(typeof s.idx==='number') resumeIdxFallback=s.idx; return s.cardId||null; } }catch(e){} return null; }
 
   // ---------- state ----------
   let mode='cards';
@@ -476,7 +476,7 @@
     return 'Added '+d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+(d.getFullYear()!==now.getFullYear()?' '+d.getFullYear():'');
   }
   function entryDays(){ return Array.from(new Set(deck.map(entryDayKey).filter(Boolean))).sort().reverse(); }
-  let gIdx=0, showProblemsOnly=false, showFlaggedOnly=false, resumeCardId=null, round=0;
+  let gIdx=0, showProblemsOnly=false, showFlaggedOnly=false, resumeCardId=null, resumeIdxFallback=-1, round=0;
 
   function setStatus(m,err){ const s=$('#status'); s.textContent=m||''; s.className='status'+(err?' err':''); }
 
@@ -525,7 +525,8 @@
     if(topicF!=='All') cs=cs.filter(c=>c.topic===topicF);
     if(addedF!=='All') cs=cs.filter(c=>{ const k=entryDayKey(c); return addedF==='builtin' ? !k : k===addedF; });
     if(unknownOnly) cs=cs.filter(c=>!c.known);
-    else cs=cs.filter(c=>!c.known || ((round%3)===((c.knownPhase||0)%3))); // known cards only every 3rd round
+    else cs=cs.filter(c=>!c.known || ((round%8)===((c.knownPhase||0)%8))); // known cards only every 8th round
+    cs.sort((a,b)=>((a.known?1:0)-(b.known?1:0)) || (entryStamp(b)||0)-(entryStamp(a)||0)); // unknown before known, then newest first
     return cs;
   }
   function renderCardsTools(){
@@ -544,7 +545,11 @@
   function renderCard(){
     const stage=$('#cardsStage'); const cards=visibleCards();
     if(!cards.length){ stage.innerHTML='<div class="empty">No cards in this filter.<br>Try a different lesson/topic, or add words in <b>Manage</b>.</div>'; return; }
-    if(resumeCardId){ const k=cards.findIndex(x=>x.id===resumeCardId); if(k>=0) idx=k; resumeCardId=null; }
+    if(resumeCardId||resumeIdxFallback>=0){
+      const k=resumeCardId?cards.findIndex(x=>x.id===resumeCardId):-1;
+      if(k>=0) idx=k; else if(resumeIdxFallback>=0) idx=Math.min(resumeIdxFallback,cards.length-1);
+      resumeCardId=null; resumeIdxFallback=-1;
+    }
     if(idx>=cards.length) idx=cards.length-1; if(idx<0) idx=0;
     const c=cards[idx]; const o=c.options[0];
     const bigZh=c.options.map(op=>'<div class="opt2"><div class="bighz2">'+esc(op.hanzi)+'</div>'+(op.py?'<div class="py2">'+esc(op.py)+'</div>':'')+'<button class="spk" data-say="'+encodeURIComponent(op.hanzi)+'" style="margin-top:10px">🔊</button></div>').join('');
@@ -563,7 +568,7 @@
       '<div class="controls"><button class="nav" data-nav="-1">‹ Prev</button><button class="nav" data-nav="flip">Flip</button><button class="nav" data-nav="1">Next ›</button></div>'+
       '<div class="judge"><button class="dont" data-judge="0">✗ Still learning</button><button class="know" data-judge="1">✓ I know it</button></div>'+
       '<div class="judge" style="margin-top:8px"><button class="flagbtn'+(c.flagged?' on':'')+'" data-flag="'+c.id+'">'+(c.flagged?'🚩 Flagged as incorrect':'🚩 Flag as incorrect')+'</button></div>'+
-      '<div class="counter">'+(idx+1)+' / '+cards.length+'   ·   round '+(round+1)+'   ·   known '+deck.filter(x=>x.known).length+' / '+deck.length+(c.known?'   ·   ✓ (shows every 3rd round)':'')+'</div>';
+      '<div class="counter">'+(idx+1)+' / '+cards.length+'   ·   round '+(round+1)+'   ·   known '+deck.filter(x=>x.known).length+' / '+deck.length+(c.known?'   ·   ✓ (shows every 8th round)':'')+'</div>';
     if(dir==='listen'){ setTimeout(()=>speak(o.hanzi),250); }
     saveState();
   }
@@ -1171,7 +1176,7 @@
     const say=e.target.closest('[data-say]'); if(say){ e.stopPropagation(); speak(decodeURIComponent(say.getAttribute('data-say'))); return; }
     const dirb=e.target.closest('[data-dir]'); if(dirb){ dir=dirb.getAttribute('data-dir'); flipped=false; renderCardsTools(); renderCard(); return; }
     const nav=e.target.closest('[data-nav]'); if(nav){ const v=nav.getAttribute('data-nav'); if(v==='flip'){ flipCard(); } else move(parseInt(v,10)); return; }
-    const judge=e.target.closest('[data-judge]'); if(judge){ const c=visibleCards()[idx]; if(c){ const isKnown=judge.getAttribute('data-judge')==='1'; c.known=isKnown; if(isKnown) c.knownPhase=round%3; else delete c.knownPhase; save(); if(unknownOnly&&c.known) renderCard(); else move(1);} return; }
+    const judge=e.target.closest('[data-judge]'); if(judge){ const c=visibleCards()[idx]; if(c){ const isKnown=judge.getAttribute('data-judge')==='1'; c.known=isKnown; if(isKnown) c.knownPhase=round%8; else delete c.knownPhase; save(); if(unknownOnly&&c.known) renderCard(); else move(1);} return; }
     const gnav=e.target.closest('[data-gnav]'); if(gnav){ const list=grammarList(); gIdx=(gIdx+parseInt(gnav.getAttribute('data-gnav'),10)+list.length)%list.length; renderGrammar(); return; }
     const mid=e.target.closest('[data-mid]'); if(mid){ answerMatch(mid.getAttribute('data-mid')); return; }
     if(e.target.closest('[data-mskip]')){ newMatch(); return; }
