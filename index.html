@@ -45,6 +45,17 @@
   .mbtn{flex:none; font-size:13px; padding:9px 14px; border-radius:20px; border:none; background:var(--pill); color:#cfd3f5; cursor:pointer; white-space:nowrap;}
   .mbtn.active{background:var(--accent); color:#1a1d2e; font-weight:700;}
   #micBtn.rec{background:var(--danger); color:#fff; animation:micpulse 1.2s ease-in-out infinite;}
+  .liveprev{display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; margin:6px 0 2px;}
+  .lpchip{border:none; border-radius:14px; background:var(--pill); color:#fff; padding:8px 12px; cursor:pointer; text-align:left;}
+  .lpchip .lph{font-size:17px;}
+  .lpchip .lpp{font-size:12px; color:#cfd3f5; margin-left:6px;}
+  .lppy,.lphint{font-size:12px; color:var(--muted);}
+  #groupList{max-height:55vh; overflow:auto; margin:4px 0;}
+  .gp-item{display:block; width:100%; text-align:left; border:none; border-radius:14px; background:var(--pill); color:#fff; padding:12px 14px; margin:8px 0; cursor:pointer;}
+  .gp-item .gp-meta{display:block; font-size:12.5px; color:#cfd3f5; margin-top:3px;}
+  .gp-item.cur{outline:2px solid var(--accent);}
+  .gp-item.sug{background:#33407e;}
+  .gp-next{float:right; font-size:11px; color:var(--accent); font-weight:700; margin-left:8px;}
   @keyframes micpulse{0%,100%{opacity:1}50%{opacity:.55}}
 
   .tools{display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; margin:2px 0 6px;}
@@ -252,6 +263,7 @@
     <button class="btn ghost" id="pdfBtn" title="From a file: PDF, Word, Excel, CSV, Numbers">📄</button>
     <button class="btn ghost" id="keyBtn" title="Set Gemini API key (free, smarter reader)">🔑</button>
   </div>
+  <div class="liveprev" id="livePrev" style="display:none"></div>
   <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
   <input type="file" id="pdfInput" accept=".pdf,.docx,.xlsx,.xls,.csv,.tsv,.txt,.numbers,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain" style="display:none">
   <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:4px 0 2px;">
@@ -282,6 +294,14 @@
 </div>
 
 <!-- edit overlay -->
+<div class="overlay" id="groupOverlay" style="display:none;">
+  <div class="sheet">
+    <h2>Choose a group</h2>
+    <div id="groupList"></div>
+    <div class="ovbtns"><button class="nav" id="gpClose">Close</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="editOverlay" style="display:none;">
   <div class="sheet">
     <h2>Edit card</h2>
@@ -457,12 +477,13 @@
 
   // remember where the user left off (mode, direction, filters, current card)
   const SKEY='zh_hsk_state';
-  function saveState(){ try{ const cards=visibleCards(); const cur=cards[idx]; localStorage.setItem(SKEY, JSON.stringify({mode:mode,dir:dir,lessonF:lessonF,topicF:topicF,addedF:addedF,unknownOnly:unknownOnly,gIdx:gIdx,round:round,idx:idx,cardId:cur?cur.id:null})); }catch(e){} }
-  function loadState(){ try{ const s=JSON.parse(localStorage.getItem(SKEY)); if(s&&typeof s==='object'){ if(s.mode) mode=s.mode; if(s.dir) dir=s.dir; if(s.lessonF) lessonF=s.lessonF; if(s.topicF) topicF=s.topicF; if(s.addedF) addedF=s.addedF; unknownOnly=!!s.unknownOnly; if(typeof s.gIdx==='number') gIdx=s.gIdx; if(typeof s.round==='number') round=s.round; if(typeof s.idx==='number') resumeIdxFallback=s.idx; return s.cardId||null; } }catch(e){} return null; }
+  function saveState(){ try{ const cards=visibleCards(); const cur=cards[idx]; localStorage.setItem(SKEY, JSON.stringify({mode:mode,dir:dir,lessonF:lessonF,topicF:topicF,groupF:groupF,groupIdx:groupIdx,unknownOnly:unknownOnly,gIdx:gIdx,round:round,idx:idx,cardId:cur?cur.id:null})); }catch(e){} }
+  function loadState(){ try{ const s=JSON.parse(localStorage.getItem(SKEY)); if(s&&typeof s==='object'){ if(s.mode) mode=s.mode; if(s.dir) dir=s.dir; if(s.lessonF) lessonF=s.lessonF; if(s.topicF) topicF=s.topicF; if(s.groupF) groupF=s.groupF; if(typeof s.groupIdx==='number') groupIdx=s.groupIdx; unknownOnly=!!s.unknownOnly; if(typeof s.gIdx==='number') gIdx=s.gIdx; if(typeof s.round==='number') round=s.round; if(typeof s.idx==='number') resumeIdxFallback=s.idx; return s.cardId||null; } }catch(e){} return null; }
 
   // ---------- state ----------
   let mode='cards';
-  let idx=0, flipped=false, dir='en2zh', unknownOnly=false, lessonF='All', topicF='All', addedF='All';
+  let idx=0, flipped=false, dir='en2zh', unknownOnly=false, lessonF='All', topicF='All';
+  let groupF='group', groupIdx=0, pickerShown=false;
 
   // ---------- entry-time grouping ----------
   function entryStamp(c){ if(c.added) return c.added; const m=/^[uvgp](\d{12,14})/.exec(c.id||''); return m?+m[1]:null; }
@@ -485,7 +506,7 @@
     mode=m;
     ['cards','grammar','match','fill','packs','manage'].forEach(v=>{ $('#view-'+v).style.display = v===m?'block':'none'; });
     document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-mode')===m));
-    if(m==='cards'){ renderCardsTools(); renderCard(); }
+    if(m==='cards'){ renderCardsTools(); renderCard(); if(!pickerShown && studyPool().length>GROUP_SIZE){ pickerShown=true; renderGroupPicker(true); } }
     else if(m==='grammar'){ renderGrammarTools(); renderGrammar(); }
     else if(m==='match'){ newMatch(); }
     else if(m==='fill'){ newFill(); }
@@ -519,14 +540,22 @@
   // ---------- cards ----------
   function lessons(){ return Array.from(new Set(deck.map(c=>c.lesson))).sort(); }
   function topics(){ return Array.from(new Set(deck.map(c=>c.topic))).sort(); }
-  function visibleCards(){
+  const GROUP_SIZE=30;
+  function studyPool(){
     let cs=deck.slice();
     if(lessonF!=='All') cs=cs.filter(c=>c.lesson===lessonF);
     if(topicF!=='All') cs=cs.filter(c=>c.topic===topicF);
-    if(addedF!=='All') cs=cs.filter(c=>{ const k=entryDayKey(c); return addedF==='builtin' ? !k : k===addedF; });
+    cs.sort((a,b)=>(entryStamp(b)||0)-(entryStamp(a)||0)); // newest entries first
+    return cs;
+  }
+  function groupCount(){ return Math.max(1, Math.ceil(studyPool().length/GROUP_SIZE)); }
+  function visibleCards(){
+    const pool=studyPool();
+    if(groupF==='group'&&groupIdx>=groupCount()) groupIdx=0;
+    let cs = groupF==='all' ? pool : pool.slice(groupIdx*GROUP_SIZE,(groupIdx+1)*GROUP_SIZE);
     if(unknownOnly) cs=cs.filter(c=>!c.known);
     else cs=cs.filter(c=>!c.known || ((round%8)===((c.knownPhase||0)%8))); // known cards only every 8th round
-    cs.sort((a,b)=>((a.known?1:0)-(b.known?1:0)) || (entryStamp(b)||0)-(entryStamp(a)||0)); // unknown before known, then newest first
+    cs=cs.slice().sort((a,b)=>((a.known?1:0)-(b.known?1:0)) || (entryStamp(b)||0)-(entryStamp(a)||0)); // unknown before known, then newest first
     return cs;
   }
   function renderCardsTools(){
@@ -539,7 +568,7 @@
       '</div>'+
       '<select class="flt" id="lessonF"><option>All</option>'+lz.map(l=>'<option'+(l===lessonF?' selected':'')+'>'+esc(l)+'</option>').join('')+'</select>'+
       '<select class="flt" id="topicF"><option>All</option>'+tp.map(t=>'<option'+(t===topicF?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select>'+
-      '<select class="flt" id="addedF"><option value="All">Any time</option>'+entryDays().map(k=>'<option value="'+k+'"'+(k===addedF?' selected':'')+'>'+dayLabel(k)+'</option>').join('')+(deck.some(c=>!entryDayKey(c))?'<option value="builtin"'+(addedF==='builtin'?' selected':'')+'>Built-in</option>':'')+'</select>'+
+      '<button class="toggle" id="groupBtn">▦ '+(groupF==='all'?'All cards':'Group '+(groupIdx+1)+' of '+groupCount())+'</button>'+
       '<button class="toggle'+(unknownOnly?' on':'')+'" id="unkT">'+(unknownOnly?'To-learn':'All cards')+'</button>';
   }
   function renderCard(){
@@ -568,7 +597,7 @@
       '<div class="controls"><button class="nav" data-nav="-1">‹ Prev</button><button class="nav" data-nav="flip">Flip</button><button class="nav" data-nav="1">Next ›</button></div>'+
       '<div class="judge"><button class="dont" data-judge="0">✗ Still learning</button><button class="know" data-judge="1">✓ I know it</button></div>'+
       '<div class="judge" style="margin-top:8px"><button class="flagbtn'+(c.flagged?' on':'')+'" data-flag="'+c.id+'">'+(c.flagged?'🚩 Flagged as incorrect':'🚩 Flag as incorrect')+'</button></div>'+
-      '<div class="counter">'+(idx+1)+' / '+cards.length+'   ·   round '+(round+1)+'   ·   known '+deck.filter(x=>x.known).length+' / '+deck.length+(c.known?'   ·   ✓ (shows every 8th round)':'')+'</div>';
+      '<div class="counter">'+(groupF==='all'?'All':'Group '+(groupIdx+1)+'/'+groupCount())+'   ·   '+(idx+1)+' / '+cards.length+'   ·   round '+(round+1)+'   ·   known '+deck.filter(x=>x.known).length+' / '+deck.length+(c.known?'   ·   ✓ (shows every 8th round)':'')+'</div>';
     if(dir==='listen'){ setTimeout(()=>speak(o.hanzi),250); }
     saveState();
   }
@@ -625,6 +654,18 @@
     return {zh:zh, py:toPinyin(zh), en:await zhToEn(zh)};
   }
   function exHtml(ex){ return ex?('<div class="exzh">'+esc(ex.zh)+' <button class="spk" style="font-size:14px;padding:3px 8px;vertical-align:middle" data-say="'+encodeURIComponent(ex.zh)+'">🔊</button></div><div class="expy">'+esc(ex.py)+'</div>'+(ex.en?'<div class="exen">'+esc(ex.en)+'</div>':'')):''; }
+  // ---------- alternative translations (e.g. breakfast → 早饭 / 早餐) ----------
+  function enrichable(en){ return navigator.onLine!==false && en.length<=24 && en.indexOf('(')<0 && !/particle|measure word/i.test(en); }
+  async function ensureAltOptions(c){
+    if(!c || c.altTried || !c.en || !enrichable(c.en) || (c.options&&c.options.length>1)) return;
+    try{
+      const extra=await translate(c.en); c.altTried=true; let addedOpt=false;
+      extra.forEach(x=>{ if(c.options.length<4 && x.hanzi && !c.options.some(y=>y.hanzi===x.hanzi)){ c.options.push(x); addedOpt=true; } });
+      save();
+      if(addedOpt){ const cur=visibleCards()[idx]; if(mode==='cards'&&cur&&cur.id===c.id&&flipped){ renderCard(); ensureExample(c); } }
+    }catch(e){}
+  }
+
   function paintExample(c){ const box=$('#exBox'); if(!box) return; box.innerHTML = c.ex? exHtml(c.ex) : '<span class="exnote">no example available (needs internet)</span>'; }
   async function ensureExample(c){
     if(c.ex){ paintExample(c); return; }
@@ -633,7 +674,7 @@
     const ex=await makeExample(c); c.exTried=true; if(ex){ c.ex=ex; save(); }
     const cur=visibleCards()[idx]; if(cur&&cur.id===c.id&&flipped) paintExample(c);
   }
-  function flipCard(){ flipped=!flipped; const cd=$('#card'); if(cd) cd.classList.toggle('flipped'); if(flipped){ const c=visibleCards()[idx]; if(c) ensureExample(c); } else{ const box=$('#exBox'); if(box) box.innerHTML=''; } }
+  function flipCard(){ flipped=!flipped; const cd=$('#card'); if(cd) cd.classList.toggle('flipped'); if(flipped){ const c=visibleCards()[idx]; if(c){ ensureExample(c); ensureAltOptions(c); } } else{ const box=$('#exBox'); if(box) box.innerHTML=''; } }
 
   // ---------- grammar ----------
   function grammarList(){ return lessonF==='All'?GRAMMAR:GRAMMAR.filter(g=>g.lesson===lessonF); }
@@ -737,8 +778,13 @@
     if(hasZh(raw)){
       const triples=raw.split(/[,，;；\n]+/).map(s=>parseFlexLine(s)).filter(t=>t&&t.h);
       let n=0;
-      triples.forEach((t,i)=>{ deck.push({id:'u'+Date.now()+'_'+i, en:t.e||t.h, options:[{hanzi:t.h, py:(t.p&&looksPinyin(t.p))?t.p:(toPinyin(t.h)||t.p)}], lesson:'My Words', topic:'Other', pic:false, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)}); n++; });
-      if(n){ save(); inp.value=''; setStatus('Added '+n+' card'+(n!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2000); return; }
+      for(let i=0;i<triples.length;i++){
+        const t=triples[i];
+        let opts=[{hanzi:t.h, py:(t.p&&looksPinyin(t.p))?t.p:(toPinyin(t.h)||t.p)}];
+        if(t.e && enrichable(t.e)){ try{ (await translate(t.e)).forEach(x=>{ if(opts.length<4 && x.hanzi && !opts.some(y=>y.hanzi===x.hanzi)) opts.push(x); }); }catch(e){} }
+        deck.push({id:'u'+Date.now()+'_'+i, en:t.e||t.h, options:opts, lesson:'My Words', topic:'Other', pic:false, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)}); n++;
+      }
+      if(n){ save(); inp.value=''; lpHide(); setStatus('Added '+n+' card'+(n!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2000); return; }
     }
     const words=splitWords(raw); $('#addBtn').disabled=true; let added=0;
     try{
@@ -747,11 +793,39 @@
         const options=await translate(words[i]);
         if(options.length){ deck.push({id:'u'+Date.now()+'_'+i, en:words[i], options, lesson:'My Words', topic:'Other', pic:true, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)}); added++; }
       }
-      save(); inp.value='';
+      save(); inp.value=''; lpHide();
       setStatus(added?('Added '+added+' card'+(added!==1?'s':'')+' ✓'):'No translations found — check your connection.', !added);
-      renderList(); setTimeout(()=>setStatus(''),2000);
+      renderList();
+      setTimeout(()=>setStatus(''),2000);
     }catch(e){ setStatus('Error: '+e.message,true); } finally{ $('#addBtn').disabled=false; }
   }
+
+  // ---------- study groups of 30, by time entered ----------
+  function renderGroupPicker(suggest){
+    const pool=studyPool(); const n=Math.max(1,Math.ceil(pool.length/GROUP_SIZE));
+    const sug=suggest&&n>1 ? (groupF==='group'?(groupIdx+1)%n:0) : -1;
+    let html='';
+    for(let i=0;i<n;i++){
+      const gc=pool.slice(i*GROUP_SIZE,(i+1)*GROUP_SIZE); if(!gc.length) break;
+      const kn=gc.filter(c=>c.known).length;
+      const l1=dayLabel(entryDayKey(gc[0])).replace('Added ',''), l2=dayLabel(entryDayKey(gc[gc.length-1])).replace('Added ','');
+      html+='<button class="gp-item'+(groupF==='group'&&i===groupIdx?' cur':'')+(i===sug?' sug':'')+'" data-group="'+i+'">'+
+        (i===sug?'<span class="gp-next">next up</span>':(groupF==='group'&&i===groupIdx?'<span class="gp-next">current</span>':''))+
+        '<b>Group '+(i+1)+'</b><span class="gp-meta">'+gc.length+' cards · '+kn+' known · '+esc(l1===l2?l1:(l1+' → '+l2))+'</span></button>';
+    }
+    html+='<button class="gp-item'+(groupF==='all'?' cur':'')+'" data-group="all"><b>All cards</b><span class="gp-meta">'+pool.length+' cards</span></button>';
+    $('#groupList').innerHTML=html;
+    $('#groupOverlay').style.display='flex';
+  }
+  $('#gpClose').addEventListener('click',()=>{ $('#groupOverlay').style.display='none'; });
+  document.body.addEventListener('click',e=>{
+    if(e.target.id==='groupBtn'){ renderGroupPicker(false); return; }
+    const g=e.target.closest('[data-group]'); if(!g) return;
+    const v=g.getAttribute('data-group');
+    if(v==='all'){ groupF='all'; } else { groupF='group'; groupIdx=Math.max(0,Math.min(parseInt(v,10)||0, groupCount()-1)); }
+    idx=0; flipped=false; $('#groupOverlay').style.display='none';
+    renderCardsTools(); renderCard();
+  });
 
   // ---------- voice add (speak an English word → card + example) ----------
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -772,7 +846,8 @@
       const options=await translate(word);
       if(!options.length){ setStatus('No translation found for “'+word+'” — check connection.',true); return; }
       const card={id:'v'+Date.now(), en:word, options:options, lesson:'My Words', topic:'Spoken', pic:true, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)};
-      deck.push(card); save(); $('#word').value=''; if(mode==='manage') renderList();
+      deck.push(card); save(); $('#word').value=''; lpHide();
+      if(mode==='manage') renderList();
       speak(options[0].hanzi);
       setStatus('Added '+options[0].hanzi+' ✓ — finding example sentence…');
       const ex=await makeExample(card); card.exTried=true; if(ex){ card.ex=ex; save(); }
@@ -783,6 +858,83 @@
   }
   $('#micBtn').addEventListener('click',micToggle);
   if(!SR) $('#micBtn').style.display='none';
+
+  // ---------- live preview while typing (characters + pinyin before you add) ----------
+  let _lpTimer=null,_lpSeq=0;
+  function lpHide(){ const el=$('#livePrev'); if(el){ el.style.display='none'; el.innerHTML=''; } }
+  async function lpUpdate(){
+    const raw=$('#word').value.trim();
+    const el=$('#livePrev'); if(!el) return;
+    if(!raw){ lpHide(); return; }
+    if(hasZh(raw)){
+      const t=parseFlexLine(raw);
+      if(t&&t.h){ el.innerHTML='<span class="lppy">'+esc(t.h)+' → '+esc(toPinyin(t.h)||'…')+'</span>'; el.style.display='flex'; }
+      return;
+    }
+    if(raw.length<2){ lpHide(); return; }
+    const seq=++_lpSeq;
+    el.innerHTML='<span class="lppy">looking up “'+esc(raw)+'”…</span>'; el.style.display='flex';
+    try{
+      const wantPy=isProbablyPinyin(raw);
+      const res=await Promise.all([
+        translate(raw).catch(()=>[]),
+        wantPy?pinyinToHanzi(raw).catch(()=>[]):Promise.resolve([])
+      ]);
+      if(seq!==_lpSeq) return;
+      const opts=res[0], pyc=res[1]; let html='';
+      if(pyc.length) html+='<span class="lppy">拼音:</span>'+pyc.slice(0,4).map(h=>'<button class="lpchip" data-lpy="'+encodeURIComponent(h)+'"><span class="lph">'+esc(h)+'</span><span class="lpp">'+esc(toPinyin(h))+'</span></button>').join('');
+      if(opts.length) html+=(pyc.length?'<span class="lppy">EN:</span>':'')+opts.slice(0,4).map(o=>'<button class="lpchip" data-lp="'+encodeURIComponent(JSON.stringify({h:o.hanzi,p:o.py}))+'"><span class="lph">'+esc(o.hanzi)+'</span><span class="lpp">'+esc(o.py)+'</span></button>').join('');
+      if(!html){ el.innerHTML='<span class="lppy">no match yet — keep typing…</span>'; return; }
+      el.innerHTML=html+'<span class="lphint">tap one to add it'+(opts.length?' · Add keeps all':'')+'</span>';
+    }catch(e){ if(seq===_lpSeq) lpHide(); }
+  }
+  // pinyin typed with or without tones → hanzi candidates (Google pinyin engine)
+  function stripTones(s){ return s.normalize('NFD').replace(/[̀-ͯ]/g,''); }
+  function isProbablyPinyin(s){
+    s=stripTones(s.toLowerCase()).replace(/[1-5'\s.]/g,'');
+    if(!s||/[^a-z]/.test(s)) return false;
+    const re=/(zh|ch|sh|[bpmfdtnlgkhjqxrzcsyw])?(iang|iong|uang|üan|ang|eng|ong|ian|iao|ing|uai|uan|ai|ao|an|ei|en|er|ia|ie|in|iu|ou|ua|uo|ui|un|üe|ün|[aoeiuü])/y;
+    let i=0;
+    while(i<s.length){ re.lastIndex=i; const m=re.exec(s); if(!m||m.index!==i) return false; i=re.lastIndex; }
+    return true;
+  }
+  async function pinyinToHanzi(py){
+    const q=stripTones(py.toLowerCase()).replace(/\s+/g,'');
+    try{
+      const r=await fetch('https://inputtools.google.com/request?text='+encodeURIComponent(q)+'&itc=zh-t-i0-pinyin&num=6&cp=0&cs=1&ie=utf-8&oe=utf-8');
+      const d=await r.json();
+      if(d[0]==='SUCCESS'&&d[1]&&d[1][0]){ const c=(d[1][0][1]||[]).filter(hasZh); if(c.length) return c; }
+    }catch(e){}
+    try{ // fallback: let the translator interpret the pinyin as Chinese
+      const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q='+encodeURIComponent(q));
+      const d=await r.json(); const s=(d[0]||[]).map(x=>x&&x[0]?x[0]:'').join('');
+      if(hasZh(s)) return [s];
+    }catch(e){}
+    return [];
+  }
+  async function addFromPinyin(h){
+    setStatus('Translating '+h+'…');
+    let en=''; try{ en=await zhToEn(h); }catch(e){}
+    deck.push({id:'u'+Date.now(), en:en||h, options:[{hanzi:h, py:toPinyin(h)}], lesson:'My Words', topic:'Other', pic:false, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)});
+    save(); $('#word').value=''; lpHide(); if(mode==='manage') renderList(); speak(h);
+    setStatus('Added '+h+(en?' — '+en:'')+' ✓'); setTimeout(()=>setStatus(''),2200);
+  }
+  $('#word').addEventListener('input',()=>{ clearTimeout(_lpTimer); _lpTimer=setTimeout(lpUpdate,450); });
+  document.body.addEventListener('click',e=>{
+    const pchip=e.target.closest('[data-lpy]');
+    if(pchip){ addFromPinyin(decodeURIComponent(pchip.getAttribute('data-lpy'))); return; }
+    const chip=e.target.closest('[data-lp]'); if(!chip) return;
+    const d=JSON.parse(decodeURIComponent(chip.getAttribute('data-lp')));
+    const en=$('#word').value.trim(); if(!en||!d.h) return;
+    deck.push({id:'u'+Date.now(), en:en, options:[{hanzi:d.h, py:d.p||toPinyin(d.h)}], lesson:'My Words', topic:'Other', pic:false, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)});
+    save(); $('#word').value=''; lpHide(); if(mode==='manage') renderList(); speak(d.h);
+    setStatus('Added '+d.h+' ✓'); setTimeout(()=>setStatus(''),1800);
+  });
+
+  // edit dialog: pinyin follows the characters you type (until you edit pinyin yourself)
+  let _edPyTouched=false;
+  $('#edPy').addEventListener('input',()=>{ _edPyTouched=true; });
+  $('#edHz').addEventListener('input',()=>{ if(!_edPyTouched){ const v=toPinyin($('#edHz').value.trim()); if(v) $('#edPy').value=v; } });
 
   // ---------- backup / restore (move your deck between devices or addresses) ----------
   $('#exportBtn').addEventListener('click',()=>{
@@ -814,9 +966,9 @@
     if(flagged.length) bar+=(bar?'    ':'')+'🚩 '+flagged.length+' flagged · <button class="elink" id="flagToggle">'+(showFlaggedOnly?'show all':'show only')+'</button>';
     if(!bar) bar='✓ All '+deck.length+' cards have English, characters &amp; pinyin';
     let html='<div class="probbar">'+bar+'</div>';
-    const list=showFlaggedOnly?flagged:(showProblemsOnly?problems:deck);
+    const list=(showFlaggedOnly?flagged:(showProblemsOnly?problems:deck)).slice().sort((a,b)=>(entryStamp(b)||0)-(entryStamp(a)||0));
     const groups={}; list.forEach(c=>{ (groups[c.lesson]=groups[c.lesson]||[]).push(c); });
-    Object.keys(groups).sort().forEach(n=>{
+    Object.keys(groups).forEach(n=>{
       html+='<div class="grouphdr">'+esc(n)+' · '+groups[n].length+'</div>';
       html+=groups[n].map(c=>{ const iss=cardIssue(c); const o=(c.options&&c.options[0])||{hanzi:'',py:''};
         const cls=iss?' bad':(c.flagged?' flag':'');
@@ -1156,7 +1308,9 @@
         const t=triples[i];
         const h=t.h||''; const p=(t.p&&looksPinyin(t.p))?t.p:((h?toPinyin(h):'')||t.p); const en=t.e||'';
         if(!en && !h) continue;
-        deck.push({id:'g'+Date.now()+'_'+i, en:en||h, options:[{hanzi:h, py:p}], lesson:'My Words', topic:'Other', pic:false, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)});
+        let opts=[{hanzi:h, py:p}];
+        if(en && enrichable(en)){ $('#ovMsg').textContent='Adding “'+en+'” ('+(i+1)+'/'+triples.length+')…'; try{ (await translate(en)).forEach(x=>{ if(opts.length<4 && x.hanzi && !opts.some(y=>y.hanzi===x.hanzi)) opts.push(x); }); }catch(e){} }
+        deck.push({id:'g'+Date.now()+'_'+i, en:en||h, options:opts, lesson:'My Words', topic:'Other', pic:false, known:false, added:Date.now(), seed:Math.floor(Math.random()*99999)});
         added++;
       }
       ovProgress(1); save(); showOverlay(false); lastTriples=null; setStatus('Added '+added+' card'+(added!==1?'s':'')+' ✓'); renderList(); setTimeout(()=>setStatus(''),2200);
@@ -1196,7 +1350,6 @@
   document.body.addEventListener('change',e=>{
     if(e.target.id==='lessonF'){ lessonF=e.target.value; idx=0; flipped=false; renderCard(); }
     if(e.target.id==='topicF'){ topicF=e.target.value; idx=0; flipped=false; renderCard(); }
-    if(e.target.id==='addedF'){ addedF=e.target.value; idx=0; flipped=false; renderCard(); }
     if(e.target.id==='glessonF'){ lessonF=e.target.value; gIdx=0; renderGrammar(); }
     if(e.target.id==='ovClean'){ autoClean=e.target.checked; ovReview(); }
   });
@@ -1253,6 +1406,7 @@
   function openEdit(id){
     const c=deck.find(x=>x.id===id); if(!c) return; editId=id;
     const o=(c.options&&c.options[0])||{hanzi:'',py:''};
+    _edPyTouched=false;
     $('#edEn').value=c.en||''; $('#edHz').value=o.hanzi||''; $('#edPy').value=o.py||'';
     $('#edLesson').value=c.lesson||''; $('#edTopic').value=c.topic||'';
     $('#editOverlay').style.display='flex';
