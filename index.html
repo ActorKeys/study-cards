@@ -269,6 +269,7 @@
   <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:4px 0 2px;">
     <button class="toggle" id="cleanBtn">🧹 Remove junk / incomplete</button>
     <button class="toggle" id="fixBtn">🔧 Check &amp; fix mismatches (online)</button>
+    <button class="toggle" id="dupBtn">♻️ Remove duplicates</button>
     <button class="toggle" id="exportBtn">💾 Backup deck</button>
     <button class="toggle" id="importBtn">📥 Restore backup</button>
     <input type="file" id="importInput" accept=".json,application/json" style="display:none">
@@ -936,6 +937,34 @@
   $('#edPy').addEventListener('input',()=>{ _edPyTouched=true; });
   $('#edHz').addEventListener('input',()=>{ if(!_edPyTouched){ const v=toPinyin($('#edHz').value.trim()); if(v) $('#edPy').value=v; } });
 
+  // ---------- remove duplicate cards (same Chinese word) ----------
+  function removeDuplicates(){
+    const byH={};
+    deck.forEach(c=>{ const h=((c.options&&c.options[0]&&c.options[0].hanzi)||'').trim(); if(!h) return; (byH[h]=byH[h]||[]).push(c); });
+    const groups=Object.keys(byH).filter(h=>byH[h].length>1);
+    const total=groups.reduce((s,h)=>s+byH[h].length-1,0);
+    if(!total){ setStatus('No duplicates found ✓'); setTimeout(()=>setStatus(''),2200); return; }
+    if(!confirm('Found '+total+' duplicate card'+(total!==1?'s':'')+' (same Chinese word). Merge them into one card each?')) return;
+    const drop=new Set();
+    groups.forEach(h=>{
+      const g=byH[h];
+      const keep=g.slice().sort((a,b)=>((b.ex?1:0)-(a.ex?1:0)) || ((b.known?1:0)-(a.known?1:0)) || ((entryStamp(a)||0)-(entryStamp(b)||0)))[0];
+      g.forEach(c=>{
+        if(c===keep) return;
+        keep.known=keep.known||c.known;
+        if(c.ex&&!keep.ex) keep.ex=c.ex;
+        if(c.flagged) keep.flagged=true;
+        (c.options||[]).forEach(o=>{ if(o.hanzi&&keep.options.length<6&&!keep.options.some(y=>y.hanzi===o.hanzi)) keep.options.push(o); });
+        const a=(keep.en||'').toLowerCase(), b=(c.en||'').toLowerCase();
+        if(b&&a&&a.indexOf(b)<0&&b.indexOf(a)<0&&(keep.en+' / '+c.en).length<=60) keep.en=keep.en+' / '+c.en;
+        drop.add(c.id);
+      });
+    });
+    deck=deck.filter(c=>!drop.has(c.id)); save(); renderList();
+    setStatus('Merged '+total+' duplicate'+(total!==1?'s':'')+' ✓'); setTimeout(()=>setStatus(''),2600);
+  }
+  $('#dupBtn').addEventListener('click',removeDuplicates);
+
   // ---------- backup / restore (move your deck between devices or addresses) ----------
   $('#exportBtn').addEventListener('click',()=>{
     try{
@@ -1445,6 +1474,7 @@
   });
 
   if('speechSynthesis' in window){ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>speechSynthesis.getVoices(); }
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
   const _purged=purgeBad(); if(_purged) save();
   resumeCardId=loadState();
   setMode(mode);
