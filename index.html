@@ -808,11 +808,10 @@
     let html='';
     for(let i=0;i<n;i++){
       const gc=pool.slice(i*GROUP_SIZE,(i+1)*GROUP_SIZE); if(!gc.length) break;
-      const kn=gc.filter(c=>c.known).length;
       const l1=dayLabel(entryDayKey(gc[0])).replace('Added ',''), l2=dayLabel(entryDayKey(gc[gc.length-1])).replace('Added ','');
       html+='<button class="gp-item'+(groupF==='group'&&i===groupIdx?' cur':'')+(i===sug?' sug':'')+'" data-group="'+i+'">'+
         (i===sug?'<span class="gp-next">next up</span>':(groupF==='group'&&i===groupIdx?'<span class="gp-next">current</span>':''))+
-        '<b>Group '+(i+1)+'</b><span class="gp-meta">'+gc.length+' cards · '+kn+' known · '+esc(l1===l2?l1:(l1+' → '+l2))+'</span></button>';
+        '<b>Group '+(i+1)+'</b><span class="gp-meta">'+gc.length+' cards · added '+esc(l1===l2?l1:(l1+' → '+l2))+'</span></button>';
     }
     html+='<button class="gp-item'+(groupF==='all'?' cur':'')+'" data-group="all"><b>All cards</b><span class="gp-meta">'+pool.length+' cards</span></button>';
     $('#groupList').innerHTML=html;
