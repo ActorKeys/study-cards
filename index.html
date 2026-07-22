@@ -95,6 +95,7 @@
   .example .expy{font-size:13px; color:#5b6090; margin-top:4px;}
   .example .exen{font-size:13px; color:#8a8fb5; margin-top:4px;}
   .example .exnote{font-size:12px; color:#9aa0c2;}
+  .gnote{font-size:13.5px; color:#3c4166; margin-top:10px; line-height:1.5; text-align:left; background:#f2f3fa; border-radius:10px; padding:10px 12px;}
   .pic{width:100%; height:40%; background:#e9ebf5 center/cover no-repeat; position:relative; flex:none;}
   .pic .ph{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#9aa0c2; font-size:13px; text-align:center; padding:10px;}
   .pic .regen{position:absolute; top:8px; right:8px; background:rgba(0,0,0,.45); color:#fff; border:none; border-radius:20px; font-size:11px; padding:5px 10px; cursor:pointer;}
@@ -177,6 +178,7 @@
   .probbar{font-size:13px; color:var(--muted); text-align:center; margin:8px 2px 2px;}
   .elab{display:block; font-size:12px; color:var(--muted); margin:12px 2px 0;}
   .elab input{display:block; width:100%; margin-top:5px; border:none; border-radius:12px; padding:12px 14px; font-size:16px; background:rgba(255,255,255,.1); color:#fff; outline:none;}
+  .elab textarea{display:block; width:100%; margin-top:5px; border:none; border-radius:12px; padding:12px 14px; font-size:15px; background:rgba(255,255,255,.1); color:#fff; outline:none; min-height:72px; resize:vertical; font-family:inherit;}
   .elink{background:none; border:none; color:var(--accent2); font-size:12px; cursor:pointer; padding:0 0 0 6px;}
   .install{font-size:11px; color:var(--muted); text-align:center; margin-top:10px; line-height:1.5;}
 
@@ -295,6 +297,22 @@
 </div>
 
 <!-- edit overlay -->
+<div class="overlay" id="gcOverlay" style="display:none;">
+  <div class="sheet">
+    <h2>New grammar card</h2>
+    <label class="elab">Rule name (front of card)<input id="gcPoint" type="text" placeholder="e.g. Using 把 to move the object" autocomplete="off"></label>
+    <label class="elab">Pattern<input id="gcPattern" type="text" placeholder="e.g. Subject + 把 + Object + Verb" autocomplete="off"></label>
+    <label class="elab">Explanation<textarea id="gcRule" placeholder="When and how the rule is used…"></textarea></label>
+    <label class="elab">Example — Chinese<input id="gcExZh" type="text" placeholder="我把书放在桌子上。" autocomplete="off"></label>
+    <label class="elab">Example — pinyin (auto)<input id="gcExPy" type="text" autocomplete="off"></label>
+    <label class="elab">Example — English<input id="gcExEn" type="text" placeholder="I put the book on the table." autocomplete="off"></label>
+    <div class="ovbtns">
+      <button class="nav" id="gcCancel">Cancel</button>
+      <button class="btn" id="gcSave">Add card</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="groupOverlay" style="display:none;">
   <div class="sheet">
     <h2>Choose a group</h2>
@@ -586,13 +604,13 @@
     let front, back;
     if(dir==='zh2en'){
       front='<span class="tag">Chinese</span><span class="lz-pill">'+esc(c.lesson)+'</span><div class="bighz">'+esc(o.hanzi)+'</div><button class="spk" style="margin-top:18px" data-say="'+encodeURIComponent(o.hanzi)+'">🔊</button><div class="hint">tap for meaning</div>';
-      back='<span class="tag">Meaning</span><div class="stack"><div class="bighz2">'+esc(c.en)+'</div><div class="py2">'+esc(o.py)+'</div><div class="example" id="exBox"></div></div>';
+      back='<span class="tag">Meaning</span><div class="stack"><div class="bighz2">'+esc(c.en)+'</div><div class="py2">'+esc(o.py)+'</div>'+(c.note?'<div class="gnote">'+esc(c.note)+'</div>':'')+'<div class="example" id="exBox"></div></div>';
     } else if(dir==='listen'){
       front='<span class="tag">Listen</span><span class="lz-pill">'+esc(c.lesson)+'</span><button class="spk listenbtn" data-say="'+encodeURIComponent(o.hanzi)+'">🔊</button><div class="hint">tap 🔊, then tap card to reveal</div>';
-      back='<span class="tag">Chinese</span><div class="stack">'+bigZh+'<div class="meaning">'+esc(c.en)+'</div><div class="example" id="exBox"></div></div>';
+      back='<span class="tag">Chinese</span><div class="stack">'+bigZh+'<div class="meaning">'+esc(c.en)+'</div>'+(c.note?'<div class="gnote">'+esc(c.note)+'</div>':'')+'<div class="example" id="exBox"></div></div>';
     } else {
       front='<span class="tag">English</span><span class="cat-pill">'+esc(c.topic)+'</span><div class="en">'+esc(c.en)+'</div><div class="hint">tap to reveal Chinese</div>';
-      back='<span class="tag">Chinese</span><div class="stack">'+bigZh+'<div class="meaning">'+esc(c.en)+'</div><div class="example" id="exBox"></div></div>';
+      back='<span class="tag">Chinese</span><div class="stack">'+bigZh+'<div class="meaning">'+esc(c.en)+'</div>'+(c.note?'<div class="gnote">'+esc(c.note)+'</div>':'')+'<div class="example" id="exBox"></div></div>';
     }
     stage.innerHTML='<div class="card-wrap"><div class="card'+(flipped?' flipped':'')+'" id="card"><div class="face front">'+front+'</div><div class="face back">'+back+'</div></div></div>'+
       '<div class="controls"><button class="nav" data-nav="-1">‹ Prev</button><button class="nav" data-nav="flip">Flip</button><button class="nav" data-nav="1">Next ›</button></div>'+
@@ -678,10 +696,64 @@
   function flipCard(){ flipped=!flipped; const cd=$('#card'); if(cd) cd.classList.toggle('flipped'); if(flipped){ const c=visibleCards()[idx]; if(c){ ensureExample(c); ensureAltOptions(c); } } else{ const box=$('#exBox'); if(box) box.innerHTML=''; } }
 
   // ---------- grammar ----------
-  function grammarList(){ return lessonF==='All'?GRAMMAR:GRAMMAR.filter(g=>g.lesson===lessonF); }
+  GRAMMAR.forEach(g=>{ g.lesson=g.lesson||g.l||'Grammar'; g.ex=g.ex||[]; });
+  const CGKEY='zh_custom_grammar';
+  let CUSTOM_GRAMMAR=(function(){ try{ const a=JSON.parse(localStorage.getItem(CGKEY)); return Array.isArray(a)?a:[]; }catch(e){ return []; } })();
+  CUSTOM_GRAMMAR.forEach(g=>{ g.lesson=g.lesson||'My Grammar'; g.ex=g.ex||[]; g.custom=true; });
+  function saveCustomGrammar(){ try{ localStorage.setItem(CGKEY, JSON.stringify(CUSTOM_GRAMMAR)); }catch(e){} }
+  function allGrammar(){ return GRAMMAR.concat(CUSTOM_GRAMMAR); }
+  function grammarList(){ const all=allGrammar(); return lessonF==='All'?all:all.filter(g=>g.lesson===lessonF); }
+  // grammar rule → flashcard (front: rule name · back: pattern, explanation, example)
+  function grammarKey(g){ return (g.point||'')+'|'+(g.pattern||''); }
+  function addGrammarCard(g){
+    const key=grammarKey(g);
+    if(deck.some(c=>c.gkey===key)) return false;
+    const e0=(g.ex&&g.ex[0])||null;
+    deck.push({id:'gr'+Date.now()+'_'+Math.floor(Math.random()*9999), gkey:key, en:g.point, note:g.rule,
+      options:[{hanzi:g.pattern, py:''}], lesson:g.lesson||g.l||'Grammar', topic:'Grammar',
+      pic:false, known:false, added:Date.now(), exTried:true, altTried:true,
+      ex:e0?{zh:e0.h, py:e0.p, en:e0.e}:null, seed:Math.floor(Math.random()*99999)});
+    return true;
+  }
+  document.body.addEventListener('click',e=>{
+    const ga=e.target.closest('[data-gadd]');
+    if(ga){ const g=grammarList()[parseInt(ga.getAttribute('data-gadd'),10)]; if(g){ const okA=addGrammarCard(g); if(okA) save(); setStatus(okA?('Added “'+g.point+'” to your cards ✓'):'Already in your cards ✓'); setTimeout(()=>setStatus(''),2200); } return; }
+    if(e.target.id==='gAddAll'){ const list=grammarList(); let n=0; list.forEach(g=>{ if(addGrammarCard(g)) n++; }); if(n) save(); setStatus(n?('Added '+n+' grammar card'+(n!==1?'s':'')+' ✓'):'All of these are already cards ✓'); setTimeout(()=>setStatus(''),2400); return; }
+    if(e.target.id==='gcNew'){ ['gcPoint','gcPattern','gcRule','gcExZh','gcExPy','gcExEn'].forEach(i=>{ $('#'+i).value=''; }); _gcPyTouched=false; $('#gcOverlay').style.display='flex'; return; }
+    const gd=e.target.closest('[data-gdel]');
+    if(gd){ const i=parseInt(gd.getAttribute('data-gdel'),10); const g=grammarList()[i];
+      if(g&&g.custom&&confirm('Remove the custom rule “'+g.point+'”? (Its flashcard, if any, stays.)')){
+        const k=CUSTOM_GRAMMAR.indexOf(g);
+        if(k>=0){ CUSTOM_GRAMMAR.splice(k,1); saveCustomGrammar(); if(gIdx>=grammarList().length) gIdx=0; renderGrammarTools(); renderGrammar(); }
+      } return; }
+  });
+  // custom grammar card form
+  let _gcPyTouched=false;
+  $('#gcExPy').addEventListener('input',()=>{ _gcPyTouched=true; });
+  $('#gcExZh').addEventListener('input',()=>{ if(!_gcPyTouched){ const v=toPinyin($('#gcExZh').value.trim()); if(v) $('#gcExPy').value=v; } });
+  $('#gcCancel').addEventListener('click',()=>{ $('#gcOverlay').style.display='none'; });
+  $('#gcSave').addEventListener('click',()=>{
+    const point=$('#gcPoint').value.trim(), pattern=$('#gcPattern').value.trim(), rule=$('#gcRule').value.trim();
+    const zh=$('#gcExZh').value.trim(), py=$('#gcExPy').value.trim(), enEx=$('#gcExEn').value.trim();
+    if(!point){ setStatus('Give the rule a name first.',true); setTimeout(()=>setStatus(''),2200); return; }
+    const key=point+'|'+pattern;
+    if(deck.some(c=>c.gkey===key)){ setStatus('You already have a card for this rule.',true); setTimeout(()=>setStatus(''),2400); return; }
+    deck.push({id:'gr'+Date.now()+'_'+Math.floor(Math.random()*9999), gkey:key, en:point, note:rule||'',
+      options:[{hanzi:pattern||point, py:''}], lesson:'My Grammar', topic:'Grammar',
+      pic:false, known:false, added:Date.now(), exTried:true, altTried:true,
+      ex: zh?{zh:zh, py:py||toPinyin(zh), en:enEx}:null, seed:Math.floor(Math.random()*99999)});
+    CUSTOM_GRAMMAR.push({lesson:'My Grammar', custom:true, point:point, pattern:pattern, rule:rule||'', ex: zh?[{h:zh, p:py||toPinyin(zh), e:enEx}]:[]});
+    saveCustomGrammar();
+    save(); $('#gcOverlay').style.display='none';
+    if(mode==='manage') renderList();
+    else if(mode==='grammar'){ lessonF='All'; gIdx=grammarList().length-1; renderGrammarTools(); renderGrammar(); }
+    setStatus('Added grammar card “'+point+'” ✓'); setTimeout(()=>setStatus(''),2400);
+  });
   function renderGrammarTools(){
-    const lz=Array.from(new Set(GRAMMAR.map(g=>g.lesson))).sort();
-    $('#grammarTools').innerHTML='<select class="flt" id="glessonF"><option>All</option>'+lz.map(l=>'<option'+(l===lessonF?' selected':'')+'>'+esc(l)+'</option>').join('')+'</select>';
+    const lz=Array.from(new Set(allGrammar().map(g=>g.lesson))).sort();
+    $('#grammarTools').innerHTML='<select class="flt" id="glessonF"><option>All</option>'+lz.map(l=>'<option'+(l===lessonF?' selected':'')+'>'+esc(l)+'</option>').join('')+'</select>'+
+      '<button class="toggle" id="gAddAll">➕ Add all shown to cards</button>'+
+      '<button class="toggle" id="gcNew">✍️ New grammar card</button>';
   }
   function renderGrammar(){
     const list=grammarList(); const stage=$('#grammarStage');
@@ -690,6 +762,7 @@
     const g=list[gIdx];
     const ex=g.ex.map(x=>'<div class="row2"><div style="flex:1"><div class="hz">'+esc(x.h)+'</div><div class="py">'+esc(x.p)+'</div><div class="em">'+esc(x.e)+'</div></div><button class="spk" data-say="'+encodeURIComponent(x.h)+'">🔊</button></div>').join('');
     stage.innerHTML='<div class="gcard"><div class="gpt">'+esc(g.point)+'</div><div class="gpat">'+esc(g.pattern)+'</div><div class="grule">'+esc(g.rule)+'</div><div class="gex">'+ex+'</div></div>'+
+      '<div class="judge" style="margin-top:10px"><button class="know" data-gadd="'+gIdx+'">➕ Make this a flashcard</button>'+(g.custom?'<button class="dont" data-gdel="'+gIdx+'">🗑 Remove rule</button>':'')+'</div>'+
       '<div class="controls" style="max-width:420px"><button class="nav" data-gnav="-1">‹ Prev</button><button class="nav" data-gnav="1">Next ›</button></div>'+
       '<div class="counter">'+(gIdx+1)+' / '+list.length+' grammar points · '+esc(g.lesson)+'</div>';
   }
@@ -1048,6 +1121,7 @@
   function badEnglish(s){ const words=(s||'').toLowerCase().split(/[^a-z']+/).filter(Boolean); if(!words.length) return true; return !words.some(wordOk); }
   // returns a problem description for a card, or '' if it's complete and valid
   function cardIssue(c){
+    if(c.gkey) return ''; // grammar-rule cards: patterns may legally lack hanzi/pinyin
     const o=c.options&&c.options[0];
     if(!o||!o.hanzi||!hasZh(o.hanzi)) return 'missing Chinese characters';
     if(!o.py||!o.py.trim()) return 'missing pinyin';
@@ -1388,7 +1462,7 @@
   async function fixMismatches(){
     if(!deck.length) return;
     $('#fixBtn').disabled=true; $('#cleanBtn').disabled=true;
-    const arr=deck.filter(c=>c.lesson==='My Words');
+    const arr=deck.filter(c=>c.lesson==='My Words' && !c.gkey);
     if(!arr.length){ $('#fixBtn').disabled=false; $('#cleanBtn').disabled=false; setStatus('No imported cards to check — built-in lessons & packs are already verified ✓'); setTimeout(()=>setStatus(''),3800); return; }
     ovReading('Checking cards…','Verifying English ↔ Chinese…'); $('#ovBtns').style.display='none';
     let deleted=0, fixed=0, ok=0, errs=0;
@@ -1411,6 +1485,7 @@
   // when a card is flagged, automatically verify it online and fix/confirm/delete
   function refreshCurrent(){ if(mode==='cards') renderCard(); else if(mode==='manage') renderList(); }
   async function verifyAndFix(c){
+    if(c.gkey){ setStatus('Grammar cards aren’t auto-verified — edit it with ✏️ if something’s off.'); setTimeout(()=>setStatus(''),3000); return; }
     setStatus('🔧 Verifying “'+(c.en||'')+'”…');
     if(!c.en || badEnglish(c.en)){ deck=deck.filter(x=>x.id!==c.id); save(); refreshCurrent(); setStatus('Removed card (no real English word) ✓'); setTimeout(()=>setStatus(''),3000); return; }
     let opts;
